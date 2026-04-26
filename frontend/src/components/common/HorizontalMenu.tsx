@@ -1,0 +1,30 @@
+"use client";
+
+import Link from "next/link";
+
+interface MenuItem {
+  label: string;
+  path: string;
+}
+
+interface HorizontalMenuProps {
+  items: MenuItem[];
+}
+
+const HorizontalMenu: React.FC<HorizontalMenuProps> = ({ items }) => {
+  return (
+    <div className="flex flex-row justify-center gap-4 p-1 bg-base-100 rounded">
+      {items.map((item, index) => (
+        <Link
+          key={index}
+          href={item.path}
+          className="btn btn-sm btn-outline min-w-[100px] text-center hover:text-primary hover:hover:bg-base-200 rounded-lg"
+        >
+          {item.label}
+        </Link>
+      ))}
+    </div>
+  );
+};
+
+export default HorizontalMenu;

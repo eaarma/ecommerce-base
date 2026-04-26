@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark,
+    night,
+    customtheme;
+
+  darktheme: "light_custom";
+  base: false; /* Disable daisyUI's base styles to avoid conflicts */
+}
+
+@plugin "daisyui/theme" {
+  name: "light_custom";
+  default: true;
+
+  /* Core colors */
+  --color-primary: #0284c7; /* Calm and modern */
+  --color-secondary: #059669; /* Soft teal, fresh */
+  --color-accent: #f59e0b; /* Warm amber, for highlights/buttons */
+  --color-neutral: #374151; /* Dark gray for text and borders */
+  --color-base-100: #f9fafb; /* Slightly off-white background */
+  --color-base-200: #e5e7eb; /* 👈 light border */
+  --color-base-300: #e5e7eb;
+  --color-base-400: #a7bdcc;
+  --color-primary-hover: #7dd3fc; /* sky-500 (lighter) */ /* Feedback colors */
+  --color-info: #3b82f6; /* Blue info messages */
+  --color-success: #16a34a; /* Green success messages */
+  --color-warning: #facc15; /* Golden warning */
+  --color-error: #ef4444; /* Red error messages */
+  --color-sky-300: #7dd3fc;
+  --color-sky-400: #38bdf8;
+
+  --color-base-content: #1f2937; /* main text (dark gray) */
+
+  --color-primary-content: #ffffff;
+  --color-secondary-content: #ffffff;
+  --color-accent-content: #000000;
+
+  --color-neutral-content: #ffffff;
+
+  /* Rounded corners */
+  --rounded-box: 0.5rem; /* softer, modern rounded container */
+  --rounded-btn: 0.5rem;
+  --rounded-badge: 1.5rem;
+
+  /* Animations */
+  --animation-btn: 0.2s;
+  --animation-input: 0.15s;
+
+  /* Button text style */
+  --btn-text-case: none;
+  --btn-focus-scale: 0.97;
+
+  /* Borders & Tabs */
+  --tab-border: 1px;
+  --tab-radius: 0.5rem;
+}
+
+* {
+  border-color: var(--color-base-400);
+}
+
+@layer components {
+  .btn,
+  .input,
+  .select,
+  .textarea {
+    @apply rounded-lg;
+  }
+}
+
+.btn,
+.input,
+.select,
+.textarea {
+  border-radius: 0.5rem !important; /* rounded-lg */
+}
+
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+.react-datepicker {
+  z-index: 9999 !important;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+.page-container > * {
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .page-container > * {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-container > * {
+    padding-left: 4rem;
+    padding-right: 4rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .page-container > * {
+    padding-left: 5rem;
+    padding-right: 5rem;
+  }
+}
+
+.full-bleed {
+  width: 100%;
+}
+
+@media (max-width: 639px) {
+  .full-bleed {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+}
