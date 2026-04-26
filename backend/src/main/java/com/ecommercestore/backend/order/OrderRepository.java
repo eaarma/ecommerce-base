@@ -12,19 +12,19 @@ import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    @EntityGraph(attributePaths = "items")
+    @EntityGraph(attributePaths = { "items", "delivery" })
     Optional<Order> findByIdAndReservationToken(Long id, UUID reservationToken);
 
-    @EntityGraph(attributePaths = "items")
+    @EntityGraph(attributePaths = { "items", "delivery" })
     List<Order> findAllByOrderByCreatedAtDesc();
 
-    @EntityGraph(attributePaths = "items")
+    @EntityGraph(attributePaths = { "items", "delivery" })
     List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
 
-    @EntityGraph(attributePaths = "items")
+    @EntityGraph(attributePaths = { "items", "delivery" })
     Optional<Order> findWithItemsById(Long id);
 
-    @EntityGraph(attributePaths = { "items", "items.product" })
+    @EntityGraph(attributePaths = { "items", "items.product", "delivery" })
     @Query("""
             select o
             from Order o

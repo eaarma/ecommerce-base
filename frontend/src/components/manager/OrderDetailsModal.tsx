@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
+  ExternalLink,
   MoreHorizontal,
   PackageOpen,
   ReceiptText,
   RotateCcw,
+  Truck,
 } from "lucide-react";
 
 import Modal from "@/components/common/Modal";
@@ -13,8 +15,22 @@ import OrderRefundModal, {
   type RefundAction,
 } from "@/components/manager/OrderRefundModal";
 import { OrderService } from "@/lib/orderService";
-import type { OrderItem, OrderResponse, OrderStatus } from "@/types/order";
+import type {
+  DeliveryCarrier,
+  DeliveryStatus,
+  OrderItem,
+  OrderResponse,
+  OrderStatus,
+} from "@/types/order";
 import type { RefundResponseDto } from "@/types/payment";
+import {
+  DELIVERY_CARRIER_LABELS,
+  DELIVERY_STATUS_LABELS,
+  formatDeliveryCarrier,
+  formatDeliveryMethod,
+  formatDeliveryStatus,
+  getDeliveryDestinationLines,
+} from "@/utils/delivery";
 
 type OrderDetailsModalProps = {
   order: OrderResponse | null;
@@ -27,6 +43,17 @@ type ItemOptionsMenu = {
   top: number;
   left: number;
 };
+
+type DeliveryFormState = {
+  status: DeliveryStatus;
+  carrier: DeliveryCarrier;
+  trackingNumber: string;
+  trackingUrl: string;
+};
+
+const DELIVERY_STATUS_OPTIONS = Object.keys(
+  DELIVERY_STATUS_LABELS,
+) as DeliveryStatus[];
 
 const formatMoney = (amount: number, currency: string) =>
   new Intl.NumberFormat("en-US", {
@@ -49,7 +76,7 @@ const formatDate = (value?: string | null) => {
 const getCustomerName = (order: OrderResponse) =>
   `${order.customerFirstName} ${order.customerLastName}`.trim();
 
-const getStatusBadgeClass = (status: OrderStatus) => {
+const getOrderStatusBadgeClass = (status: OrderStatus) => {
   switch (status) {
     case "PAID":
       return "badge-success";
@@ -66,6 +93,28 @@ const getStatusBadgeClass = (status: OrderStatus) => {
   }
 };
 
+const getDeliveryStatusBadgeClass = (status: DeliveryStatus) => {
+  switch (status) {
+    case "DELIVERED":
+      return "badge-success";
+    case "READY_TO_SHIP":
+      return "badge-info";
+    case "SHIPPED":
+      return "badge-primary";
+    case "CANCELLED":
+      return "badge-error";
+    default:
+      return "badge-warning";
+  }
+};
+
+const buildDeliveryFormState = (order: OrderResponse): DeliveryFormState => ({
+  status: order.delivery.status,
+  carrier: order.delivery.carrier,
+  trackingNumber: order.delivery.trackingNumber ?? "",
+  trackingUrl: order.delivery.trackingUrl ?? "",
+});
+
 export default function OrderDetailsModal({
   order,
   onClose,
@@ -81,6 +130,11 @@ export default function OrderDetailsModal({
   const [isOrderOptionsOpen, setIsOrderOptionsOpen] = useState(false);
   const [itemOptionsMenu, setItemOptionsMenu] =
     useState<ItemOptionsMenu | null>(null);
+  const [deliveryForm, setDeliveryForm] = useState<DeliveryFormState | null>(
+    order ? buildDeliveryFormState(order) : null,
+  );
+  const [isUpdatingDelivery, setIsUpdatingDelivery] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!order) {
@@ -128,7 +182,7 @@ export default function OrderDetailsModal({
     }, 0);
   }, [refunds]);
 
-  if (!currentOrder) return null;
+  if (!currentOrder || !deliveryForm) return null;
 
   const canRefundOrder =
     currentOrder.status === "PAID" ||
@@ -137,6 +191,7 @@ export default function OrderDetailsModal({
     Number(currentOrder.total) - refundedAmount,
     0,
   );
+  const deliveryLines = getDeliveryDestinationLines(currentOrder.delivery);
 
   const openItemRefund = (item: OrderItem) => {
     const refundedQuantity = refundedQuantityByItem[item.id] ?? 0;
@@ -238,6 +293,7 @@ export default function OrderDetailsModal({
       ]);
 
       setCurrentOrder(updatedOrder);
+      setDeliveryForm(buildDeliveryFormState(updatedOrder));
       setRefunds(updatedRefunds);
       closeRefundDialog();
       await onRefunded();
@@ -247,6 +303,40 @@ export default function OrderDetailsModal({
       );
     } finally {
       setSubmittingRefund(false);
+    }
+  };
+
+  const updateDeliveryField = (
+    field: keyof DeliveryFormState,
+    value: string | DeliveryCarrier | DeliveryStatus,
+  ) => {
+    setDeliveryForm((current) =>
+      current ? { ...current, [field]: value } : current,
+    );
+  };
+
+  const submitDeliveryUpdate = async () => {
+    setIsUpdatingDelivery(true);
+    setDeliveryError(null);
+
+    try {
+      const updatedOrder = await OrderService.updateManagerDelivery(
+        currentOrder.id,
+        {
+          status: deliveryForm.status,
+          carrier: deliveryForm.carrier,
+          trackingNumber: deliveryForm.trackingNumber,
+          trackingUrl: deliveryForm.trackingUrl,
+        },
+      );
+
+      setCurrentOrder(updatedOrder);
+      setDeliveryForm(buildDeliveryFormState(updatedOrder));
+      await onRefunded();
+    } catch {
+      setDeliveryError("Delivery update failed. Please try again.");
+    } finally {
+      setIsUpdatingDelivery(false);
     }
   };
 
@@ -302,7 +392,7 @@ export default function OrderDetailsModal({
               </p>
             </div>
             <span
-              className={`badge capitalize ${getStatusBadgeClass(
+              className={`badge capitalize ${getOrderStatusBadgeClass(
                 currentOrder.status,
               )}`}
             >
@@ -316,25 +406,52 @@ export default function OrderDetailsModal({
               <div className="mt-3 space-y-1 text-sm text-base-content/70">
                 <p>{getCustomerName(currentOrder)}</p>
                 <p>{currentOrder.customerEmail}</p>
-                {currentOrder.deliveryPhone && (
-                  <p>{currentOrder.deliveryPhone}</p>
-                )}
               </div>
             </section>
 
             <section className="rounded-lg bg-base-200 p-4">
-              <h4 className="font-semibold text-base-content">Delivery</h4>
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="font-semibold text-base-content">Delivery</h4>
+                <span
+                  className={`badge ${getDeliveryStatusBadgeClass(
+                    currentOrder.delivery.status,
+                  )}`}
+                >
+                  {formatDeliveryStatus(currentOrder.delivery.status)}
+                </span>
+              </div>
+
               <div className="mt-3 space-y-1 text-sm text-base-content/70">
-                <p>
-                  {currentOrder.deliveryAddressLine1}
-                  {currentOrder.deliveryAddressLine2
-                    ? `, ${currentOrder.deliveryAddressLine2}`
-                    : ""}
+                <p className="font-medium text-base-content">
+                  {currentOrder.delivery.recipientName}
                 </p>
-                <p>
-                  {currentOrder.deliveryCity}, {currentOrder.deliveryPostalCode}
+                <p>{currentOrder.delivery.recipientEmail}</p>
+                {currentOrder.delivery.recipientPhone && (
+                  <p>{currentOrder.delivery.recipientPhone}</p>
+                )}
+                <p className="mt-2">
+                  {formatDeliveryMethod(currentOrder.delivery.method)} via{" "}
+                  {formatDeliveryCarrier(currentOrder.delivery.carrier)}
                 </p>
-                <p>{currentOrder.deliveryCountry}</p>
+                {deliveryLines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+                {currentOrder.delivery.trackingNumber && (
+                  <p className="mt-2">
+                    Tracking number: {currentOrder.delivery.trackingNumber}
+                  </p>
+                )}
+                {currentOrder.delivery.trackingUrl && (
+                  <a
+                    href={currentOrder.delivery.trackingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    Open tracking
+                    <ExternalLink size={14} aria-hidden="true" />
+                  </a>
+                )}
               </div>
             </section>
           </div>
@@ -352,6 +469,10 @@ export default function OrderDetailsModal({
                 <div className="flex justify-between gap-4">
                   <span className="text-base-content/60">Payment</span>
                   <span>{currentOrder.paidAt ? "Paid" : "Not paid"}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-base-content/60">Delivery</span>
+                  <span>{formatDeliveryStatus(currentOrder.delivery.status)}</span>
                 </div>
               </div>
             </section>
@@ -371,9 +492,114 @@ export default function OrderDetailsModal({
                   <span className="text-base-content/60">Paid</span>
                   <span>{formatDate(currentOrder.paidAt)}</span>
                 </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-base-content/60">Shipped</span>
+                  <span>{formatDate(currentOrder.delivery.shippedAt)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-base-content/60">Delivered</span>
+                  <span>{formatDate(currentOrder.delivery.deliveredAt)}</span>
+                </div>
               </div>
             </section>
           </div>
+
+          <section className="rounded-lg border border-base-300 p-4">
+            <div className="flex items-center gap-2">
+              <Truck size={18} aria-hidden="true" />
+              <h4 className="font-semibold text-base-content">
+                Delivery Management
+              </h4>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="form-control">
+                <span className="label-text">Delivery status</span>
+                <select
+                  className="select select-bordered mt-1 w-full"
+                  value={deliveryForm.status}
+                  onChange={(event) =>
+                    updateDeliveryField(
+                      "status",
+                      event.target.value as DeliveryStatus,
+                    )
+                  }
+                >
+                  {DELIVERY_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {formatDeliveryStatus(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="form-control">
+                <span className="label-text">Carrier</span>
+                <select
+                  className="select select-bordered mt-1 w-full"
+                  value={deliveryForm.carrier}
+                  onChange={(event) =>
+                    updateDeliveryField(
+                      "carrier",
+                      event.target.value as DeliveryCarrier,
+                    )
+                  }
+                >
+                  {(Object.entries(DELIVERY_CARRIER_LABELS) as Array<
+                    [DeliveryCarrier, string]
+                  >).map(([carrier, label]) => (
+                    <option key={carrier} value={carrier}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="form-control">
+                <span className="label-text">Tracking number</span>
+                <input
+                  type="text"
+                  className="input input-bordered mt-1 w-full"
+                  value={deliveryForm.trackingNumber}
+                  onChange={(event) =>
+                    updateDeliveryField("trackingNumber", event.target.value)
+                  }
+                  placeholder="Optional"
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="label-text">Tracking URL</span>
+                <input
+                  type="url"
+                  className="input input-bordered mt-1 w-full"
+                  value={deliveryForm.trackingUrl}
+                  onChange={(event) =>
+                    updateDeliveryField("trackingUrl", event.target.value)
+                  }
+                  placeholder="https://..."
+                />
+              </label>
+            </div>
+
+            {deliveryError && (
+              <p className="mt-3 text-sm text-error">{deliveryError}</p>
+            )}
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={isUpdatingDelivery}
+                onClick={submitDeliveryUpdate}
+              >
+                {isUpdatingDelivery ? "Saving..." : "Save delivery update"}
+              </button>
+              <p className="text-sm text-base-content/60">
+                Use status changes here to mark the order shipped or delivered.
+              </p>
+            </div>
+          </section>
 
           <section>
             <div className="flex items-center gap-2">

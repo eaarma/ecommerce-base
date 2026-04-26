@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { ShoppingBag } from "lucide-react";
+
 import CartItem from "@/components/cart/CartItem";
 import {
   decreaseQuantity,
@@ -27,53 +30,88 @@ export default function CartItemSection() {
   };
 
   return (
-    <section className="w-full space-y-4 md:w-2/3">
-      <h1 className="text-2xl font-bold text-base-content">Your Cart</h1>
+    <section className="space-y-5">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-content">
+          1
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold text-base-content">
+            Cart Items
+          </h2>
+          <p className="text-sm text-base-content/60">
+            Select the products you want to keep in this checkout flow.
+          </p>
+        </div>
+      </div>
 
       {cartItems.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-base-300 bg-base-100 p-5 text-sm text-base-content/60">
-          Your cart is empty.
+        <div className="rounded-[24px] border border-dashed border-base-300 bg-base-100 px-6 py-12 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-base-200 text-base-content/70">
+            <ShoppingBag className="h-6 w-6" />
+          </div>
+          <h3 className="mt-5 text-xl font-semibold text-base-content">
+            Your cart is empty
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-base-content/60">
+            Add a few products first, then come back here to review your order.
+          </p>
+          <div className="mt-6">
+            <Link href="/" className="btn btn-primary h-12 px-6 text-base">
+              Continue Shopping
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between border-b border-base-300 pb-3">
-            <label
-              htmlFor="cart-toggle-all"
-              className="flex cursor-pointer items-center gap-3"
-            >
-              <input
-                id="cart-toggle-all"
-                type="checkbox"
-                checked={allSelected}
-                onChange={handleToggleAll}
-                className="checkbox checkbox-primary"
-              />
-              <span className="text-sm font-medium text-base-content/75">
-                Select all ({selectedCount})
-              </span>
-            </label>
+        <div className="space-y-4">
+          <div className="rounded-[24px] border border-base-300 bg-base-100 p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <label
+                  htmlFor="cart-toggle-all"
+                  className="flex cursor-pointer items-center gap-3"
+                >
+                  <input
+                    id="cart-toggle-all"
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={handleToggleAll}
+                    className="checkbox checkbox-primary"
+                  />
+                  <span className="text-sm font-medium text-base-content/80">
+                    Select all items
+                  </span>
+                </label>
+                <p className="mt-2 text-sm text-base-content/60">
+                  {selectedCount} of {cartItems.length} line items selected for
+                  checkout.
+                </p>
+              </div>
 
-            <button
-              type="button"
-              className="btn btn-outline btn-error btn-sm"
-              disabled={selectedCount === 0}
-              onClick={() => dispatch(removeSelectedFromCart())}
-            >
-              Remove ({selectedCount})
-            </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-error h-11 px-4"
+                disabled={selectedCount === 0}
+                onClick={() => dispatch(removeSelectedFromCart())}
+              >
+                Remove Selected
+              </button>
+            </div>
           </div>
 
-          {cartItems.map((item) => (
-            <CartItem
-              key={item.productId}
-              item={item}
-              selected={isSelected(item.selected)}
-              onDecrease={() => dispatch(decreaseQuantity(item.productId))}
-              onIncrease={() => dispatch(increaseQuantity(item.productId))}
-              onRemove={() => dispatch(removeFromCart(item.productId))}
-              onToggle={() => dispatch(toggleItemSelection(item.productId))}
-            />
-          ))}
+          <div className="space-y-4">
+            {cartItems.map((item) => (
+              <CartItem
+                key={item.productId}
+                item={item}
+                selected={isSelected(item.selected)}
+                onDecrease={() => dispatch(decreaseQuantity(item.productId))}
+                onIncrease={() => dispatch(increaseQuantity(item.productId))}
+                onRemove={() => dispatch(removeFromCart(item.productId))}
+                onToggle={() => dispatch(toggleItemSelection(item.productId))}
+              />
+            ))}
+          </div>
         </div>
       )}
     </section>

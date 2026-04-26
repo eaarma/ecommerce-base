@@ -1,5 +1,6 @@
 package com.ecommercestore.backend.order.dto;
 
+import com.ecommercestore.backend.delivery.dto.DeliveryResponse;
 import com.ecommercestore.backend.order.OrderStatus;
 
 import java.math.BigDecimal;
@@ -14,12 +15,7 @@ public record OrderResponse(
         String customerEmail,
         String customerFirstName,
         String customerLastName,
-        String deliveryAddressLine1,
-        String deliveryAddressLine2,
-        String deliveryCity,
-        String deliveryPostalCode,
-        String deliveryCountry,
-        String deliveryPhone,
+        DeliveryResponse delivery,
         BigDecimal subtotal,
         BigDecimal shippingTotal,
         BigDecimal total,

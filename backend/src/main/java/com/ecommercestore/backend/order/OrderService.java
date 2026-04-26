@@ -1,5 +1,8 @@
 package com.ecommercestore.backend.order;
 
+import com.ecommercestore.backend.delivery.Delivery;
+import com.ecommercestore.backend.delivery.DeliveryStatus;
+import com.ecommercestore.backend.delivery.dto.ReserveDeliveryRequest;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -33,25 +36,21 @@ public class OrderService {
     @Transactional
     public Order reserveOrder(ReserveOrderRequest request) {
         Map<Long, Product> productsById = loadProductsById(request);
+        Delivery delivery = buildDelivery(request.delivery());
 
         Order order = Order.builder()
                 .reservationToken(UUID.randomUUID())
                 .expiresAt(Instant.now().plus(15, ChronoUnit.MINUTES))
                 .status(OrderStatus.RESERVED)
-                .customerEmail(request.customerEmail())
-                .customerFirstName(request.customerFirstName())
-                .customerLastName(request.customerLastName())
-                .deliveryAddressLine1(request.deliveryAddressLine1())
-                .deliveryAddressLine2(request.deliveryAddressLine2())
-                .deliveryCity(request.deliveryCity())
-                .deliveryPostalCode(request.deliveryPostalCode())
-                .deliveryCountry(request.deliveryCountry())
-                .deliveryPhone(request.deliveryPhone())
+                .customerEmail(requireValue(request.customerEmail(), "Customer email"))
+                .customerFirstName(requireValue(request.customerFirstName(), "Customer first name"))
+                .customerLastName(requireValue(request.customerLastName(), "Customer last name"))
                 .currency(DEFAULT_CURRENCY)
                 .shippingTotal(DEFAULT_SHIPPING_TOTAL)
                 .subtotal(BigDecimal.ZERO)
                 .total(BigDecimal.ZERO)
                 .build();
+        order.setDelivery(delivery);
 
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -192,6 +191,10 @@ public class OrderService {
         order.setStatus(OrderStatus.PAID);
         order.setPaidAt(Instant.now());
 
+        if (order.getDelivery() != null && order.getDelivery().getStatus() == DeliveryStatus.NOT_READY) {
+            order.getDelivery().setStatus(DeliveryStatus.READY_TO_SHIP);
+        }
+
         return orderRepository.save(order);
     }
 
@@ -236,6 +239,10 @@ public class OrderService {
     public void expireReservation(Order order) {
         restockReservedItems(order, OrderItemStatus.EXPIRED);
         order.setStatus(OrderStatus.EXPIRED);
+
+        if (order.getDelivery() != null) {
+            order.getDelivery().setStatus(DeliveryStatus.CANCELLED);
+        }
     }
 
     @Transactional
@@ -248,6 +255,10 @@ public class OrderService {
 
         restockReservedItems(order, OrderItemStatus.CANCELLED);
         order.setStatus(OrderStatus.CANCELLED);
+
+        if (order.getDelivery() != null) {
+            order.getDelivery().setStatus(DeliveryStatus.CANCELLED);
+        }
 
         return orderRepository.save(order);
     }
@@ -289,5 +300,52 @@ public class OrderService {
     public Order getOrderByIdForManagement(Long orderId) {
         return orderRepository.findWithItemsById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found."));
+    }
+
+    private Delivery buildDelivery(ReserveDeliveryRequest request) {
+        Delivery delivery = Delivery.builder()
+                .method(request.method())
+                .status(DeliveryStatus.NOT_READY)
+                .recipientName(requireValue(request.recipientName(), "Recipient name"))
+                .recipientPhone(requireValue(request.recipientPhone(), "Recipient phone"))
+                .recipientEmail(requireValue(request.recipientEmail(), "Recipient email"))
+                .carrier(request.carrier())
+                .build();
+
+        switch (request.method()) {
+            case PARCEL_LOCKER -> {
+                delivery.setParcelLockerId(requireValue(request.parcelLockerId(), "Parcel locker ID"));
+                delivery.setParcelLockerName(requireValue(request.parcelLockerName(), "Parcel locker name"));
+                delivery.setParcelLockerAddress(requireValue(request.parcelLockerAddress(), "Parcel locker address"));
+            }
+            case POSTAL_DELIVERY -> {
+                delivery.setAddressLine1(requireValue(request.addressLine1(), "Address line 1"));
+                delivery.setAddressLine2(normalizeOptional(request.addressLine2()));
+                delivery.setCity(requireValue(request.city(), "City"));
+                delivery.setPostalCode(requireValue(request.postalCode(), "Postal code"));
+                delivery.setCountry(requireValue(request.country(), "Country"));
+            }
+        }
+
+        return delivery;
+    }
+
+    private String requireValue(String value, String fieldName) {
+        String normalized = normalizeOptional(value);
+
+        if (normalized == null) {
+            throw new IllegalArgumentException(fieldName + " is required.");
+        }
+
+        return normalized;
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

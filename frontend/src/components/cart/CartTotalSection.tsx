@@ -7,7 +7,7 @@ import type { RootState } from "@/store/store";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
-  currency: "USD",
+  currency: "EUR",
 });
 
 const formatPrice = (price: number) => currencyFormatter.format(price);
@@ -16,6 +16,7 @@ export default function CartTotalSection() {
   const router = useRouter();
   const cartItems = useSelector((state: RootState) => state.cart.items);
   const selectedItems = cartItems.filter((item) => item.selected !== false);
+  const selectedLineCount = selectedItems.length;
   const itemCount = selectedItems.reduce(
     (total, item) => total + item.quantity,
     0,
@@ -30,32 +31,84 @@ export default function CartTotalSection() {
   };
 
   return (
-    <aside className="w-full rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm md:w-1/3 sm:mt-12">
-      <h2 className="text-xl font-semibold text-base-content">Summary</h2>
+    <aside className="h-fit lg:sticky lg:top-8">
+      <section className="space-y-6 rounded-[24px] border border-base-300 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(240,249,255,0.88)_100%)] p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-content">
+            2
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold text-base-content">
+              Checkout Summary
+            </h2>
+            <p className="text-sm text-base-content/60">
+              Only selected items will continue to checkout.
+            </p>
+          </div>
+        </div>
 
-      <div className="mt-5 space-y-3 text-sm text-base-content/70">
-        <div className="flex justify-between">
-          <span>Items</span>
-          <span>{itemCount}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>{formatPrice(subtotal)}</span>
-        </div>
-        <div className="flex justify-between border-t border-base-300 pt-3 font-semibold text-base-content">
-          <span>Total</span>
-          <span>{formatPrice(subtotal)}</span>
-        </div>
-      </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-base-300 bg-base-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-base-content/50">
+              Selected
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-base-content">
+              {selectedLineCount}
+            </p>
+            <p className="mt-1 text-sm text-base-content/60">line items</p>
+          </div>
 
-      <button
-        type="button"
-        className="btn btn-primary mt-6 w-full"
-        disabled={itemCount === 0}
-        onClick={handleCheckout}
-      >
-        Checkout
-      </button>
+          <div className="rounded-2xl border border-base-300 bg-base-100 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-base-content/50">
+              Quantity
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-base-content">
+              {itemCount}
+            </p>
+            <p className="mt-1 text-sm text-base-content/60">units total</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-base-300 bg-base-100 p-5">
+          <div className="space-y-3 text-sm text-base-content/70">
+            <div className="flex justify-between">
+              <span>Items</span>
+              <span>{itemCount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{formatPrice(subtotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Shipping</span>
+              <span className="text-base-content/55">Calculated later</span>
+            </div>
+            <div className="flex justify-between border-t border-base-300 pt-3 text-lg font-semibold text-base-content">
+              <span>Estimated Total</span>
+              <span>{formatPrice(subtotal)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            className="btn btn-primary h-12 w-full text-base"
+            disabled={itemCount === 0}
+            onClick={handleCheckout}
+          >
+            Continue to Checkout
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline h-12 w-full text-base"
+            onClick={() => router.push("/")}
+          >
+            Continue Shopping
+          </button>
+        </div>
+      </section>
     </aside>
   );
 }

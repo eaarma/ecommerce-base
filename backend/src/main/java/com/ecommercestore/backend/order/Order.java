@@ -1,5 +1,6 @@
 package com.ecommercestore.backend.order;
 
+import com.ecommercestore.backend.delivery.Delivery;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,22 +40,6 @@ public class Order {
     @Column(nullable = false)
     private String customerLastName;
 
-    @Column(nullable = false)
-    private String deliveryAddressLine1;
-
-    private String deliveryAddressLine2;
-
-    @Column(nullable = false)
-    private String deliveryCity;
-
-    @Column(nullable = false)
-    private String deliveryPostalCode;
-
-    @Column(nullable = false)
-    private String deliveryCountry;
-
-    private String deliveryPhone;
-
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal subtotal;
 
@@ -80,6 +65,9 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
+
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private Delivery delivery;
 
     @PrePersist
     void onCreate() {
@@ -109,5 +97,13 @@ public class Order {
     public void clearItems() {
         items.forEach(item -> item.setOrder(null));
         items.clear();
+    }
+
+    public void setDelivery(Delivery delivery) {
+        this.delivery = delivery;
+
+        if (delivery != null) {
+            delivery.setOrder(this);
+        }
     }
 }

@@ -12,6 +12,12 @@ import { StripeService } from "@/lib/stripeService";
 import StripeProvider from "@/providers/StripeProvider";
 import { removeSelectedFromCart } from "@/store/cartSlice";
 import type { OrderResponse } from "@/types/order";
+import {
+  formatDeliveryCarrier,
+  formatDeliveryMethod,
+  formatDeliveryStatus,
+  getDeliveryDestinationLines,
+} from "@/utils/delivery";
 import type { StripePaymentIntentResponse } from "@/types/payment";
 
 const formatMoney = (amount: number, currency: string) =>
@@ -19,6 +25,11 @@ const formatMoney = (amount: number, currency: string) =>
     style: "currency",
     currency,
   }).format(amount);
+
+const formatStatus = (value: string) => value.replace(/_/g, " ").toLowerCase();
+
+const formatCountdown = (value: number) =>
+  `${Math.floor(value / 60)}:${(value % 60).toString().padStart(2, "0")}`;
 
 const getOrderIdParam = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
@@ -50,6 +61,11 @@ export default function PaymentPage() {
     if (!order) return "";
     return `${order.customerFirstName} ${order.customerLastName}`.trim();
   }, [order]);
+
+  const deliveryLines = useMemo(
+    () => (order ? getDeliveryDestinationLines(order.delivery) : []),
+    [order],
+  );
 
   useEffect(() => {
     if (!Number.isFinite(orderId) || !reservationToken) {
@@ -247,8 +263,18 @@ export default function PaymentPage() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto min-h-screen max-w-4xl p-4 pt-8">
-        <span className="loading loading-spinner loading-lg" />
+      <main className="min-h-screen px-4 py-8">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-[28px] border border-base-300 bg-base-100 px-6 py-16 text-center shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-8">
+            <span className="loading loading-spinner loading-lg text-primary" />
+            <p className="mt-5 text-lg font-semibold text-base-content">
+              Loading payment details
+            </p>
+            <p className="mt-2 text-sm text-base-content/60">
+              We’re preparing your order summary.
+            </p>
+          </div>
+        </div>
       </main>
     );
   }
@@ -256,104 +282,234 @@ export default function PaymentPage() {
   if (!order) return null;
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl p-4 pt-8">
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <section className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-base-content">Payment</h1>
-              <p className="text-sm text-base-content/60">Order #{order.id}</p>
-            </div>
-            <span className="badge badge-outline">{order.status}</span>
-          </div>
-
-          <div className="mt-6 rounded-lg bg-base-200 p-4 text-sm">
-            <p className="font-semibold text-base-content">{contactName}</p>
-            <p className="text-base-content/70">{order.customerEmail}</p>
-            {order.deliveryPhone && (
-              <p className="text-base-content/70">{order.deliveryPhone}</p>
-            )}
-            <p className="mt-2 text-base-content/70">
-              {order.deliveryAddressLine1}
-              {order.deliveryAddressLine2
-                ? `, ${order.deliveryAddressLine2}`
-                : ""}
-              , {order.deliveryCity}, {order.deliveryPostalCode},{" "}
-              {order.deliveryCountry}
-            </p>
-          </div>
-
-          <ul className="mt-6 divide-y divide-base-300">
-            {order.items.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
-              >
-                <div>
-                  <p className="font-medium text-base-content">
-                    {item.productSnapshotName}
-                  </p>
-                  <p className="text-sm text-base-content/60">
-                    {item.quantity} x{" "}
-                    {formatMoney(item.unitPrice, order.currency)}
-                  </p>
-                </div>
-                <p className="font-semibold text-base-content">
-                  {formatMoney(item.lineTotal, order.currency)}
+    <main className="min-h-screen px-4 py-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="overflow-hidden rounded-[28px] border border-base-300 bg-base-100 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div className="border-b border-base-300 bg-[linear-gradient(135deg,rgba(224,242,254,0.95)_0%,rgba(249,250,251,0.98)_55%,rgba(236,253,245,0.95)_100%)] px-6 py-8 sm:px-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+                  Payment
                 </p>
-              </li>
-            ))}
-          </ul>
-        </section>
+                <h1 className="mt-3 text-3xl font-bold text-base-content">
+                  Review and Pay
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-base-content/65">
+                  One last review before payment. Confirm the order details,
+                  delivery information, and amount before opening Stripe.
+                </p>
+              </div>
 
-        <aside className="h-fit rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-base-content">
-            Order Total
-          </h2>
-
-          <div className="mt-5 space-y-3 text-sm text-base-content/70">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span>{formatMoney(order.subtotal, order.currency)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Shipping</span>
-              <span>{formatMoney(order.shippingTotal, order.currency)}</span>
-            </div>
-            <div className="flex justify-between border-t border-base-300 pt-3 text-lg font-semibold text-base-content">
-              <span>Total</span>
-              <span>{formatMoney(order.total, order.currency)}</span>
+              <div className="flex flex-wrap gap-2">
+                <span className="badge badge-outline border-base-300 bg-base-100/80 px-4 py-3 capitalize text-base-content">
+                  {formatStatus(order.status)}
+                </span>
+                <span className="badge badge-outline border-base-300 bg-base-100/80 px-4 py-3 text-base-content">
+                  Order #{order.id}
+                </span>
+              </div>
             </div>
           </div>
 
-          {order.status === "RESERVED" && order.expiresAt && (
-            <div className="mt-5 rounded-lg bg-warning/20 p-3 text-center text-sm font-semibold">
-              Reservation expires in {Math.floor(expiresIn / 60)}:
-              {(expiresIn % 60).toString().padStart(2, "0")}
-            </div>
-          )}
+          <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="space-y-8">
+              <section className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-content">
+                    1
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-base-content">
+                      Review Details
+                    </h2>
+                    <p className="text-sm text-base-content/60">
+                      Check who is paying and where the order will be sent.
+                    </p>
+                  </div>
+                </div>
 
-          <div className="mt-6">
-            {order.status === "PAID" ? (
-              <button type="button" className="btn btn-success w-full" disabled>
-                Paid
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary w-full"
-                disabled={isPreparingPayment || !isPayable}
-                onClick={handleOpenPaymentModal}
-              >
-                {isPreparingPayment
-                  ? "Preparing payment..."
-                  : order.status === "PAYMENT_FAILED"
-                    ? "Retry Payment"
-                    : "Pay"}
-              </button>
-            )}
+                {order.status === "PAYMENT_FAILED" && (
+                  <div className="rounded-2xl border border-error/20 bg-error/5 p-4 text-sm leading-6 text-base-content/75">
+                    A previous payment attempt failed. Your order details are
+                    still saved here, so you can review everything and try
+                    again.
+                  </div>
+                )}
+
+                {order.status === "RESERVED" && order.expiresAt && (
+                  <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4 text-sm leading-6 text-base-content/75">
+                    Your reservation is still being held. Complete payment
+                    before the timer runs out to keep the order active.
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm">
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary/65">
+                      Purchaser
+                    </p>
+                    <p className="mt-3 text-lg font-semibold text-base-content">
+                      {contactName}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-base-content/70">
+                      {order.customerEmail}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-secondary/70">
+                          Delivery
+                        </p>
+                        <p className="mt-3 text-lg font-semibold text-base-content">
+                          {order.delivery.recipientName}
+                        </p>
+                      </div>
+
+                      <span className="badge badge-outline border-base-300 bg-base-100 capitalize text-base-content">
+                        {formatDeliveryStatus(order.delivery.status)}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-1 text-sm leading-6 text-base-content/70">
+                      <p>{order.delivery.recipientEmail}</p>
+                      {order.delivery.recipientPhone && (
+                        <p>{order.delivery.recipientPhone}</p>
+                      )}
+                      <p className="pt-2">
+                        {formatDeliveryMethod(order.delivery.method)} via{" "}
+                        {formatDeliveryCarrier(order.delivery.carrier)}
+                      </p>
+                      {deliveryLines.map((line, index) => (
+                        <p key={`${line}-${index}`}>{line}</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-content">
+                    2
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-base-content">
+                      Order Summary
+                    </h2>
+                    <p className="text-sm text-base-content/60">
+                      Review the items included in this payment.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+                  <ul className="divide-y divide-base-300">
+                    {order.items.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-start justify-between gap-4 px-5 py-4"
+                      >
+                        <div>
+                          <p className="font-medium text-base-content">
+                            {item.productSnapshotName}
+                          </p>
+                          <p className="mt-1 text-sm text-base-content/60">
+                            {item.quantity} x{" "}
+                            {formatMoney(item.unitPrice, order.currency)}
+                          </p>
+                        </div>
+                        <p className="font-semibold text-base-content">
+                          {formatMoney(item.lineTotal, order.currency)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            </div>
+
+            <aside className="h-fit lg:sticky lg:top-8">
+              <section className="space-y-6 rounded-[24px] border border-base-300 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(240,249,255,0.88)_100%)] p-6 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-content">
+                    3
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-base-content">
+                      Pay Securely
+                    </h2>
+                    <p className="text-sm text-base-content/60">
+                      Open Stripe to complete the payment.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-base-300 bg-base-100 p-5">
+                  <div className="space-y-3 text-sm text-base-content/70">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span>{formatMoney(order.subtotal, order.currency)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Shipping</span>
+                      <span>
+                        {formatMoney(order.shippingTotal, order.currency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-base-300 pt-3 text-lg font-semibold text-base-content">
+                      <span>Total</span>
+                      <span>{formatMoney(order.total, order.currency)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {order.status === "RESERVED" && order.expiresAt && (
+                  <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/55">
+                      Reservation Hold
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-base-content">
+                      {formatCountdown(expiresIn)}
+                    </p>
+                    <p className="mt-1 text-sm text-base-content/65">
+                      Time remaining to complete payment.
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-primary/15 bg-base-100 p-4 text-sm leading-6 text-base-content/70">
+                  Your payment is processed securely by Stripe. We’ll confirm
+                  the order automatically as soon as the payment succeeds.
+                </div>
+
+                {order.status === "PAID" ? (
+                  <button
+                    type="button"
+                    className="btn btn-success h-12 w-full text-base"
+                    disabled
+                  >
+                    Paid
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary h-12 w-full text-base"
+                    disabled={isPreparingPayment || !isPayable}
+                    onClick={handleOpenPaymentModal}
+                  >
+                    {isPreparingPayment
+                      ? "Preparing payment..."
+                      : order.status === "PAYMENT_FAILED"
+                        ? "Retry Payment"
+                        : "Continue to Secure Payment"}
+                  </button>
+                )}
+              </section>
+            </aside>
           </div>
-        </aside>
+        </div>
       </div>
 
       <Modal
@@ -363,9 +519,13 @@ export default function PaymentPage() {
       >
         {isWaitingForWebhook ? (
           <div className="py-8 text-center">
-            <span className="loading loading-spinner loading-lg" />
-            <p className="mt-4 font-semibold text-base-content">
+            <span className="loading loading-spinner loading-lg text-primary" />
+            <p className="mt-4 text-xl font-semibold text-base-content">
               Confirming payment
+            </p>
+            <p className="mt-2 text-sm leading-6 text-base-content/60">
+              Stripe has received your payment. We’re waiting for the final
+              confirmation from the backend.
             </p>
           </div>
         ) : paymentIntent?.clientSecret ? (

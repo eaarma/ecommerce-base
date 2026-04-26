@@ -71,21 +71,35 @@ export default function StripePaymentForm({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       <div className="text-center">
-        <h2 className="text-xl font-semibold">Secure Payment</h2>
-        <p className="text-sm opacity-70">Complete your booking</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary/70">
+          Secure Payment
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-base-content">
+          Complete payment
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-base-content/65">
+          Your card details stay with Stripe and are processed through their
+          secure payment flow.
+        </p>
       </div>
 
-      <div className="bg-base-200 rounded-lg p-4 text-center">
-        <p className="text-sm opacity-60">Total</p>
-        <p className="text-2xl font-bold">{formattedAmount}</p>
+      <div className="rounded-2xl border border-primary/15 bg-[linear-gradient(135deg,rgba(224,242,254,0.95)_0%,rgba(249,250,251,0.98)_65%,rgba(236,253,245,0.9)_100%)] p-5 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/55">
+          Total
+        </p>
+        <p className="mt-2 text-3xl font-bold text-base-content">
+          {formattedAmount}
+        </p>
       </div>
 
-      <div>
-        <label className="text-sm font-medium block mb-2">Card Details</label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-base-content/80">
+          Card Details
+        </label>
 
-        <div className="border border-base-300 rounded-lg p-4 bg-white focus-within:ring-2 focus-within:ring-primary transition">
+        <div className="rounded-2xl border border-base-300 bg-white p-4 shadow-sm transition focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20">
           <CardElement
             options={{
               hidePostalCode: true,
@@ -107,7 +121,7 @@ export default function StripePaymentForm({
       </div>
 
       {errorMsg && (
-        <div className="text-sm text-red-500 bg-red-50 border border-red-200 p-3 rounded-lg">
+        <div className="rounded-2xl border border-error/20 bg-error/5 p-4 text-sm leading-6 text-error">
           {errorMsg}
         </div>
       )}
@@ -116,12 +130,12 @@ export default function StripePaymentForm({
         type="button"
         onClick={handlePay}
         disabled={loading || !stripe}
-        className="btn btn-primary w-full rounded-lg"
+        className="btn btn-primary h-12 w-full text-base"
       >
         {loading ? "Processing..." : `Pay ${formattedAmount}`}
       </button>
 
-      <div className="text-xs text-center opacity-60">
+      <div className="text-center text-xs leading-5 text-base-content/55">
         Securely processed by Stripe
       </div>
     </div>

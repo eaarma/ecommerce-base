@@ -1,5 +1,10 @@
 import api from "./api/axios";
-import { OrderResponse, OrderStatus, ReserveOrderRequest } from "@/types/order";
+import {
+  OrderResponse,
+  OrderStatus,
+  ReserveOrderRequest,
+  UpdateDeliveryRequest,
+} from "@/types/order";
 import type { RefundResponseDto } from "@/types/payment";
 
 export const OrderService = {
@@ -68,6 +73,14 @@ export const OrderService = {
 
   getManagerOrder: async (orderId: number): Promise<OrderResponse> => {
     const res = await api.get(`/api/manager/orders/${orderId}`);
+    return res.data;
+  },
+
+  updateManagerDelivery: async (
+    orderId: number,
+    data: UpdateDeliveryRequest,
+  ): Promise<OrderResponse> => {
+    const res = await api.patch(`/api/manager/orders/${orderId}/delivery`, data);
     return res.data;
   },
 

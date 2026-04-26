@@ -3,11 +3,24 @@ import CartTotalSection from "@/components/cart/CartTotalSection";
 
 export default function CartPage() {
   return (
-    <div className="mx-auto min-h-screen max-w-7xl p-4 pt-8">
-      <div className="flex flex-col gap-6 md:flex-row md:items-start">
-        <CartItemSection />
-        <CartTotalSection />
+    <main className="min-h-screen  px-4 py-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="overflow-hidden rounded-[28px] border border-base-300 bg-base-100 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div className="border-b border-base-300 bg-[linear-gradient(135deg,rgba(224,242,254,0.95)_0%,rgba(249,250,251,0.98)_55%,rgba(236,253,245,0.95)_100%)] px-6 py-8 sm:px-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
+              Cart
+            </p>
+            <h1 className="mt-3 text-3xl font-bold text-base-content">
+              Review Your Order
+            </h1>
+          </div>
+
+          <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <CartItemSection />
+            <CartTotalSection />
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
