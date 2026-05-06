@@ -1,13 +1,33 @@
-export default function CancellationRefundPolicyPage() {
-  return (
-    <div className="bg-base-100 min-h-screen flex justify-center p-6">
-      <div className="card max-w-3xl w-full bg-base-100 shadow-lg p-8 space-y-6">
-        <h1 className="text-3xl font-bold">Cancellation Policy</h1>
+import type { Metadata } from "next";
+import StorePolicyPage from "@/components/store-pages/StorePolicyPage";
+import { getPublicShopOrFallback } from "@/lib/shopService";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+import { getPublicStorePageOrFallback } from "@/lib/storePageService";
 
-        <p className="text-sm opacity-70">
-          Last updated: {new Date().getFullYear()}
-        </p>
-      </div>
-    </div>
+export async function generateMetadata(): Promise<Metadata> {
+  const [shop, refundPage] = await Promise.all([
+    getPublicShopOrFallback(),
+    getPublicStorePageOrFallback("cancellation-refund"),
+  ]);
+
+  return buildStoreMetadata({
+    shop,
+    pageTitle: refundPage.title,
+    description: refundPage.description,
+    fallbackDescription: shop.shortDescription,
+  });
+}
+
+export default async function CancellationRefundPolicyPage() {
+  const refundPage = await getPublicStorePageOrFallback("cancellation-refund");
+
+  return (
+    <StorePolicyPage
+      eyebrow="Store policy"
+      title={refundPage.title}
+      description={refundPage.description}
+      content={refundPage.contentJson}
+      closingNote={refundPage.closingNote}
+    />
   );
 }

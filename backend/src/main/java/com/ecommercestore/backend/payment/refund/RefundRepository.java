@@ -1,5 +1,6 @@
 package com.ecommercestore.backend.payment.refund;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,6 +10,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface RefundRepository extends JpaRepository<Refund, UUID> {
+
+    @EntityGraph(attributePaths = { "order", "order.items", "order.delivery", "orderItem" })
+    java.util.Optional<Refund> findWithOrderDetailsById(UUID id);
 
     List<Refund> findAllByOrderIdOrderByCreatedAtDesc(Long orderId);
 

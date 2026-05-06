@@ -36,7 +36,7 @@ export default function Modal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            className="relative z-10 my-auto w-full max-w-3xl overflow-y-auto rounded-xl bg-base-100 px-4 py-4 shadow-xl max-h-[calc(100dvh-1.5rem)] sm:px-5 sm:max-h-[calc(100dvh-2rem)]"
+            className="relative z-10 my-auto w-full max-w-4xl overflow-y-auto rounded-xl bg-base-100 px-4 py-4 shadow-xl max-h-[calc(100dvh-1.5rem)] sm:px-5 sm:max-h-[calc(100dvh-2rem)]"
             initial={{ y: 24, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 24, opacity: 0 }}

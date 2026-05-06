@@ -85,7 +85,7 @@ export default function StripePaymentForm({
         </p>
       </div>
 
-      <div className="rounded-2xl border border-primary/15 bg-[linear-gradient(135deg,rgba(224,242,254,0.95)_0%,rgba(249,250,251,0.98)_65%,rgba(236,253,245,0.9)_100%)] p-5 text-center">
+      <div className="rounded-2xl border border-primary/15 p-5 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/55">
           Total
         </p>

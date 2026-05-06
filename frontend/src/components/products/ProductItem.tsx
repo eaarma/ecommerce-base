@@ -66,7 +66,7 @@ export default function ProductItem({ product }: ProductItemProps) {
             style={{ backgroundImage: imageBackground }}
           />
 
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.04)_0%,rgba(15,23,42,0.12)_70%,rgba(15,23,42,0.3)_100%)]" />
+          <div className="pointer-events-none absolute inset-0" />
 
           <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
             <span

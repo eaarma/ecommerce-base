@@ -11,10 +11,17 @@ import { useState, useEffect, useRef } from "react";
 import { clearAuth } from "@/store/authSlice";
 import TitleText from "../common/TitleText";
 import HorizontalMenu from "../common/HorizontalMenu";
+import type { ShopPublicDto } from "@/types/shop";
 
-const Header: React.FC = () => {
+type HeaderProps = {
+  shop: ShopPublicDto;
+};
+
+const Header: React.FC<HeaderProps> = ({ shop }) => {
   const menuItems = [
     { label: "Home", path: "/" },
+    { label: "Products", path: "/products" },
+    { label: "About", path: "/about" },
     { label: "Contact", path: "/contact" },
   ];
 
@@ -29,6 +36,7 @@ const Header: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const brandImage = shop.logoUrl?.trim() || null;
 
   const handleLogout = () => {
     dispatch(clearAuth());
@@ -80,7 +88,7 @@ const Header: React.FC = () => {
 
         {/* Left: Title */}
         <div className="flex-shrink-0">
-          <TitleText title="Shop title" image="/tree.png" />
+          <TitleText title={shop.storeName} image={brandImage} />
         </div>
 
         {/* Center: Navigation Menu */}
@@ -102,7 +110,7 @@ const Header: React.FC = () => {
               </button>
 
               {open && (
-                <div className="absolute right-0 mt-2 w-44 bg-base-100 border border-gray-700 rounded shadow-lg z-50 text-neutral">
+                <div className="absolute right-0 z-50 mt-2 w-44 rounded border border-base-300 bg-base-100 text-base-content shadow-lg">
                   {/* ADMIN */}
                   {user.role === "ADMIN" && (
                     <button

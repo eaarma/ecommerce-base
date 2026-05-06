@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import ManagerShell from "@/components/manager/ManagerShell";
-import ManagerStatCard from "@/components/manager/ManagerStatCard";
-import UserSection from "@/components/manager/UserSection";
+import ManagerShell from "@/components/manager/layout/ManagerShell";
+import ManagerStatCard from "@/components/manager/shared/ManagerStatCard";
+import UserSection from "@/components/manager/users/UserSection";
 import { UserService } from "@/lib/userService";
 import type { UserDto } from "@/types/user";
 

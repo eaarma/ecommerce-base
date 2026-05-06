@@ -6,41 +6,49 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 
-import { addToCart } from "@/store/cartSlice";
+import { addToCart, createCartLineId } from "@/store/cartSlice";
 import type { AppDispatch, RootState } from "@/store/store";
-import type { ProductDto } from "@/types/product";
+import type { ProductDto, ProductVariantDto } from "@/types/product";
 
 type ProductActionsProps = {
-  product: Pick<
-    ProductDto,
-    "id" | "name" | "price" | "imageUrl" | "stockQuantity" | "status"
+  product: Pick<ProductDto, "id" | "name" | "imageUrl">;
+  selectedVariant: Pick<
+    ProductVariantDto,
+    | "id"
+    | "label"
+    | "sku"
+    | "price"
+    | "imageUrl"
+    | "stockQuantity"
+    | "status"
   >;
   disabled?: boolean;
 };
 
 export default function ProductActions({
   product,
+  selectedVariant,
   disabled = false,
 }: ProductActionsProps) {
   const dispatch = useDispatch<AppDispatch>();
+  const lineId = createCartLineId(product.id, selectedVariant.id);
   const cartItem = useSelector((state: RootState) =>
-    state.cart.items.find((item) => item.productId === product.id),
+    state.cart.items.find((item) => item.lineId === lineId),
   );
   const router = useRouter();
-  const maxQuantity = Math.max(0, product.stockQuantity);
+  const maxQuantity = Math.max(0, selectedVariant.stockQuantity);
   const cartQuantity = cartItem?.quantity ?? 0;
   const remainingQuantity = Math.max(0, maxQuantity - cartQuantity);
   const quantityLimit = remainingQuantity > 0 ? remainingQuantity : 1;
   const [quantity, setQuantity] = useState(1);
+  const effectiveQuantity = Math.min(quantity, quantityLimit);
 
   const decreaseQuantity = () => {
-    setQuantity((currentQuantity) => Math.max(1, currentQuantity - 1));
+    setQuantity(Math.max(1, effectiveQuantity - 1));
   };
 
   const increaseQuantity = () => {
-    setQuantity((currentQuantity) =>
-      Math.min(quantityLimit, currentQuantity + 1),
-    );
+    setQuantity(Math.min(quantityLimit, effectiveQuantity + 1));
   };
 
   const updateQuantity = (value: string) => {
@@ -61,17 +69,20 @@ export default function ProductActions({
       return 0;
     }
 
-    const quantityToAdd = Math.min(quantity, remainingQuantity);
+    const quantityToAdd = Math.min(effectiveQuantity, remainingQuantity);
 
     dispatch(
       addToCart({
         productId: product.id,
+        variantId: selectedVariant.id,
         name: product.name,
-        price: Number(product.price),
-        imageUrl: product.imageUrl,
-        stockQuantity: product.stockQuantity,
+        variantLabel: selectedVariant.label,
+        variantSku: selectedVariant.sku,
+        price: Number(selectedVariant.price),
+        imageUrl: selectedVariant.imageUrl ?? product.imageUrl,
+        stockQuantity: selectedVariant.stockQuantity,
         quantity: quantityToAdd,
-        status: product.status,
+        status: selectedVariant.status,
       }),
     );
 
@@ -82,7 +93,11 @@ export default function ProductActions({
     const addedQuantity = addProductToCart();
 
     if (addedQuantity > 0) {
-      toast.success(`Added ${addedQuantity} ${product.name} to cart`);
+      const lineTitle =
+        selectedVariant.label === "Default"
+          ? product.name
+          : `${product.name} (${selectedVariant.label})`;
+      toast.success(`Added ${addedQuantity} ${lineTitle} to cart`);
     }
   };
 
@@ -118,7 +133,7 @@ export default function ProductActions({
             type="number"
             min={1}
             max={quantityLimit}
-            value={quantity}
+            value={effectiveQuantity}
             disabled={disabled}
             onChange={(event) => updateQuantity(event.target.value)}
             className="input input-bordered join-item w-20 text-center"
@@ -126,7 +141,7 @@ export default function ProductActions({
           <button
             type="button"
             className="btn btn-outline join-item"
-            disabled={disabled || quantity >= quantityLimit}
+            disabled={disabled || effectiveQuantity >= quantityLimit}
             onClick={increaseQuantity}
             aria-label="Increase quantity"
           >

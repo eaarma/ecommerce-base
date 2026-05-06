@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import ManagerShell from "@/components/manager/ManagerShell";
-import ManagerStatCard from "@/components/manager/ManagerStatCard";
-import ProductSection from "@/components/manager/ProductSection";
+import ManagerShell from "@/components/manager/layout/ManagerShell";
+import ProductSection from "@/components/manager/products/ProductSection";
+import ManagerStatCard from "@/components/manager/shared/ManagerStatCard";
 import { ManagerProductService } from "@/lib/managerProductService";
 import type { ProductDto } from "@/types/product";
 

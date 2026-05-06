@@ -56,6 +56,16 @@ public class Order {
 
     private Instant paidAt;
 
+    @Column(nullable = false)
+    private boolean confirmationEmailSent;
+
+    private Instant confirmationEmailSentAt;
+
+    @Column(nullable = false)
+    private boolean cancellationEmailSent;
+
+    private Instant cancellationEmailSentAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

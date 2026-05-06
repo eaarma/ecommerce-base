@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import ManagerPaymentsSection from "@/components/manager/ManagerPaymentsSection";
-import ManagerShell from "@/components/manager/ManagerShell";
-import ManagerStatCard from "@/components/manager/ManagerStatCard";
+import ManagerPaymentsSection from "@/components/manager/payments/ManagerPaymentsSection";
+import ManagerShell from "@/components/manager/layout/ManagerShell";
+import ManagerStatCard from "@/components/manager/shared/ManagerStatCard";
 import { PaymentService } from "@/lib/paymentService";
 import type { PaymentResponseDto } from "@/types/payment";
 

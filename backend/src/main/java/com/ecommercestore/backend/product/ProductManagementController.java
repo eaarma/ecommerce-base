@@ -8,7 +8,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import com.ecommercestore.backend.product.dto.CreateProductImageRecordRequest;
 import com.ecommercestore.backend.product.dto.CreateProductRequest;
+import com.ecommercestore.backend.product.dto.ProductImageResponse;
 import com.ecommercestore.backend.product.dto.ProductResponse;
 import com.ecommercestore.backend.product.dto.UpdateProductRequest;
 
@@ -18,6 +20,7 @@ import com.ecommercestore.backend.product.dto.UpdateProductRequest;
 public class ProductManagementController {
 
     private final ProductService productService;
+    private final ProductImageService productImageService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -40,6 +43,14 @@ public class ProductManagementController {
             @PathVariable("productId") Long productId,
             @Valid @RequestBody UpdateProductRequest request) {
         return productService.updateProduct(productId, request);
+    }
+
+    @PostMapping("/{productId}/images")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProductImageResponse createProductImage(
+            @PathVariable("productId") Long productId,
+            @Valid @RequestBody CreateProductImageRecordRequest request) {
+        return productImageService.createProductImage(productId, request);
     }
 
     @PatchMapping("/{productId}/archive")

@@ -18,6 +18,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.ecommercestore.backend.security.jwt.JwtAuthenticationFilter;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 @Configuration
@@ -36,12 +37,21 @@ public class SecurityConfig {
                                                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                                 .formLogin(form -> form.disable())
                                 .httpBasic(basic -> basic.disable())
+                                .exceptionHandling(exceptions -> exceptions
+                                                .authenticationEntryPoint((request, response, authException) -> response
+                                                                .sendError(HttpServletResponse.SC_UNAUTHORIZED))
+                                                .accessDeniedHandler((request, response, accessDeniedException) -> response
+                                                                .sendError(HttpServletResponse.SC_FORBIDDEN)))
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers("/error").permitAll()
 
                                                 .requestMatchers("/api/auth/**").permitAll()
                                                 .requestMatchers("/api/public/**").permitAll()
+                                                .requestMatchers("/api/store/shop").permitAll()
+                                                .requestMatchers("/api/store/homepage").permitAll()
+                                                .requestMatchers("/api/store/pages/**").permitAll()
                                                 .requestMatchers("/api/products/**").permitAll()
+                                                .requestMatchers("/uploads/**").permitAll()
                                                 .requestMatchers("/api/checkout/**").permitAll()
                                                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
 

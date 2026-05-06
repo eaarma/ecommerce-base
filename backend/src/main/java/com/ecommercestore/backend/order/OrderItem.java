@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 import com.ecommercestore.backend.product.Product;
+import com.ecommercestore.backend.product.ProductVariant;
 
 @Getter
 @Setter
@@ -29,6 +30,10 @@ public class OrderItem {
     @JoinColumn(name = "product_id")
     private Product product;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "variant_id")
+    private ProductVariant variant;
+
     @Column(nullable = false)
     private Long productSnapshotId;
 
@@ -36,6 +41,23 @@ public class OrderItem {
     private String productSnapshotName;
 
     private String productSnapshotImageUrl;
+
+    @Column(nullable = false)
+    private Long variantSnapshotId;
+
+    @Column(nullable = false)
+    private String variantSnapshotSku;
+
+    @Column(nullable = false)
+    private String variantSnapshotLabel;
+
+    private String variantSnapshotColor;
+
+    private String variantSnapshotSize;
+
+    private String variantSnapshotWeight;
+
+    private String variantSnapshotMaterial;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice;

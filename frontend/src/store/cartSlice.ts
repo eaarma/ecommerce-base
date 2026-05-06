@@ -1,13 +1,19 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+import type { ProductStatus } from "@/types/product";
+
 export type CartItem = {
+  lineId: string;
   productId: number;
+  variantId: number;
   name: string;
+  variantLabel: string;
+  variantSku: string;
   price: number;
   imageUrl?: string | null;
   stockQuantity: number;
   quantity: number;
-  status: "DRAFT" | "ACTIVE" | "ARCHIVED" | "OUT_OF_STOCK";
+  status: ProductStatus;
   selected?: boolean;
 };
 
@@ -19,18 +25,24 @@ const initialState: CartState = {
   items: [],
 };
 
+export const createCartLineId = (productId: number, variantId: number) =>
+  `${productId}:${variantId}`;
+
 type AddToCartPayload = {
   productId: number;
+  variantId: number;
   name: string;
+  variantLabel: string;
+  variantSku: string;
   price: number;
   imageUrl?: string | null;
   stockQuantity: number;
   quantity?: number;
-  status: "DRAFT" | "ACTIVE" | "ARCHIVED" | "OUT_OF_STOCK";
+  status: ProductStatus;
 };
 
 type UpdateQuantityPayload = {
-  productId: number;
+  lineId: string;
   quantity: number;
 };
 
@@ -43,17 +55,19 @@ const cartSlice = createSlice({
     addToCart: (state, action: PayloadAction<AddToCartPayload>) => {
       const {
         productId,
+        variantId,
         name,
+        variantLabel,
+        variantSku,
         price,
         imageUrl,
         stockQuantity,
         quantity = 1,
         status,
       } = action.payload;
+      const lineId = createCartLineId(productId, variantId);
 
-      const existingItem = state.items.find(
-        (item) => item.productId === productId,
-      );
+      const existingItem = state.items.find((item) => item.lineId === lineId);
 
       if (existingItem) {
         existingItem.quantity = Math.min(
@@ -63,13 +77,19 @@ const cartSlice = createSlice({
         existingItem.stockQuantity = stockQuantity;
         existingItem.price = price;
         existingItem.name = name;
+        existingItem.variantLabel = variantLabel;
+        existingItem.variantSku = variantSku;
         existingItem.imageUrl = imageUrl;
         existingItem.status = status;
         existingItem.selected = isSelected(existingItem);
       } else {
         state.items.push({
+          lineId,
           productId,
+          variantId,
           name,
+          variantLabel,
+          variantSku,
           price,
           imageUrl,
           stockQuantity,
@@ -80,22 +100,20 @@ const cartSlice = createSlice({
       }
     },
 
-    removeFromCart: (state, action: PayloadAction<number>) => {
-      state.items = state.items.filter(
-        (item) => item.productId !== action.payload,
-      );
+    removeFromCart: (state, action: PayloadAction<string>) => {
+      state.items = state.items.filter((item) => item.lineId !== action.payload);
     },
 
     updateQuantity: (state, action: PayloadAction<UpdateQuantityPayload>) => {
       const item = state.items.find(
-        (cartItem) => cartItem.productId === action.payload.productId,
+        (cartItem) => cartItem.lineId === action.payload.lineId,
       );
 
       if (!item) return;
 
       if (action.payload.quantity <= 0) {
         state.items = state.items.filter(
-          (cartItem) => cartItem.productId !== action.payload.productId,
+          (cartItem) => cartItem.lineId !== action.payload.lineId,
         );
         return;
       }
@@ -103,9 +121,9 @@ const cartSlice = createSlice({
       item.quantity = Math.min(action.payload.quantity, item.stockQuantity);
     },
 
-    increaseQuantity: (state, action: PayloadAction<number>) => {
+    increaseQuantity: (state, action: PayloadAction<string>) => {
       const item = state.items.find(
-        (cartItem) => cartItem.productId === action.payload,
+        (cartItem) => cartItem.lineId === action.payload,
       );
 
       if (!item) return;
@@ -115,9 +133,9 @@ const cartSlice = createSlice({
       }
     },
 
-    decreaseQuantity: (state, action: PayloadAction<number>) => {
+    decreaseQuantity: (state, action: PayloadAction<string>) => {
       const item = state.items.find(
-        (cartItem) => cartItem.productId === action.payload,
+        (cartItem) => cartItem.lineId === action.payload,
       );
 
       if (!item) return;
@@ -126,7 +144,7 @@ const cartSlice = createSlice({
         item.quantity -= 1;
       } else {
         state.items = state.items.filter(
-          (cartItem) => cartItem.productId !== action.payload,
+          (cartItem) => cartItem.lineId !== action.payload,
         );
       }
     },
@@ -135,9 +153,9 @@ const cartSlice = createSlice({
       state.items = [];
     },
 
-    toggleItemSelection: (state, action: PayloadAction<number>) => {
+    toggleItemSelection: (state, action: PayloadAction<string>) => {
       const item = state.items.find(
-        (cartItem) => cartItem.productId === action.payload,
+        (cartItem) => cartItem.lineId === action.payload,
       );
 
       if (!item) return;

@@ -1,5 +1,7 @@
 package com.ecommercestore.backend.payment.refund;
 
+import com.ecommercestore.backend.email.OrderEmailRequestedEvent;
+import com.ecommercestore.backend.email.OrderEmailType;
 import com.ecommercestore.backend.order.Order;
 import com.ecommercestore.backend.order.OrderItem;
 import com.ecommercestore.backend.order.OrderItemStatus;
@@ -12,6 +14,7 @@ import com.ecommercestore.backend.payment.refund.dto.RefundResponse;
 import com.ecommercestore.backend.payment.stripe.StripeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -32,6 +35,7 @@ public class RefundService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final StripeService stripeService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public RefundResponse refundOrder(Long orderId, String reason) {
@@ -51,6 +55,7 @@ public class RefundService {
             order.getItems().forEach(item -> item.setStatus(OrderItemStatus.REFUNDED));
             order.setStatus(OrderStatus.CANCELLED_REFUNDED);
             updatePaymentStatus(payment);
+            eventPublisher.publishEvent(new OrderEmailRequestedEvent(order.getId(), OrderEmailType.CANCELLATION, reason, null));
         }
 
         return refundMapper.toResponse(refund);
@@ -98,6 +103,7 @@ public class RefundService {
                 : OrderItemStatus.PARTIALLY_REFUNDED);
         updateOrderStatus(order);
         updatePaymentStatus(payment);
+        eventPublisher.publishEvent(new OrderEmailRequestedEvent(order.getId(), OrderEmailType.ITEM_REFUND, reason, refund.getId()));
 
         return refundMapper.toResponse(refund);
     }

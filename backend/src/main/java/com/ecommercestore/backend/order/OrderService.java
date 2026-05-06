@@ -3,6 +3,8 @@ package com.ecommercestore.backend.order;
 import com.ecommercestore.backend.delivery.Delivery;
 import com.ecommercestore.backend.delivery.DeliveryStatus;
 import com.ecommercestore.backend.delivery.dto.ReserveDeliveryRequest;
+import com.ecommercestore.backend.email.OrderEmailRequestedEvent;
+import com.ecommercestore.backend.email.OrderEmailType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -13,12 +15,15 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.ecommercestore.backend.order.dto.ReserveOrderItemRequest;
 import com.ecommercestore.backend.order.dto.ReserveOrderRequest;
 import com.ecommercestore.backend.product.Product;
-import com.ecommercestore.backend.product.ProductRepository;
+import com.ecommercestore.backend.product.ProductVariant;
+import com.ecommercestore.backend.product.ProductVariantRepository;
 import com.ecommercestore.backend.product.ProductStatus;
+import com.ecommercestore.backend.product.ProductMapper;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -31,11 +36,13 @@ public class OrderService {
     private static final BigDecimal DEFAULT_SHIPPING_TOTAL = BigDecimal.ZERO;
 
     private final OrderRepository orderRepository;
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
+    private final ProductMapper productMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Order reserveOrder(ReserveOrderRequest request) {
-        Map<Long, Product> productsById = loadProductsById(request);
+        Map<Long, ProductVariant> variantsById = loadVariantsById(request);
         Delivery delivery = buildDelivery(request.delivery());
 
         Order order = Order.builder()
@@ -55,20 +62,29 @@ public class OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (ReserveOrderItemRequest itemRequest : request.items()) {
-            Product product = productsById.get(itemRequest.productId());
+            ProductVariant variant = variantsById.get(itemRequest.variantId());
+            Product product = variant.getProduct();
 
-            validateProductAvailable(product, itemRequest.quantity());
-            reserveStock(product, itemRequest.quantity());
+            validateProductAvailable(product, variant, itemRequest.productId(), itemRequest.quantity());
+            reserveStock(product, variant, itemRequest.quantity());
 
-            BigDecimal lineTotal = product.getPrice()
+            BigDecimal lineTotal = variant.getPrice()
                     .multiply(BigDecimal.valueOf(itemRequest.quantity()));
 
             OrderItem item = OrderItem.builder()
                     .product(product)
+                    .variant(variant)
                     .productSnapshotId(product.getId())
                     .productSnapshotName(product.getName())
-                    .productSnapshotImageUrl(product.getImageUrl())
-                    .unitPrice(product.getPrice())
+                    .productSnapshotImageUrl(resolveSnapshotImageUrl(product, variant))
+                    .variantSnapshotId(variant.getId())
+                    .variantSnapshotSku(variant.getSku())
+                    .variantSnapshotLabel(productMapper.buildVariantLabel(variant))
+                    .variantSnapshotColor(variant.getColor())
+                    .variantSnapshotSize(variant.getSize())
+                    .variantSnapshotWeight(variant.getWeight())
+                    .variantSnapshotMaterial(variant.getMaterial())
+                    .unitPrice(variant.getPrice())
                     .quantity(itemRequest.quantity())
                     .lineTotal(lineTotal)
                     .status(OrderItemStatus.RESERVED)
@@ -195,41 +211,57 @@ public class OrderService {
             order.getDelivery().setStatus(DeliveryStatus.READY_TO_SHIP);
         }
 
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        eventPublisher.publishEvent(new OrderEmailRequestedEvent(savedOrder.getId(), OrderEmailType.CONFIRMATION, null, null));
+        return savedOrder;
     }
 
-    private Map<Long, Product> loadProductsById(ReserveOrderRequest request) {
-        var productIds = request.items()
+    private Map<Long, ProductVariant> loadVariantsById(ReserveOrderRequest request) {
+        var variantIds = request.items()
                 .stream()
-                .map(ReserveOrderItemRequest::productId)
+                .map(ReserveOrderItemRequest::variantId)
                 .collect(Collectors.toSet());
 
-        var products = productRepository.findAllById(productIds);
+        var variants = productVariantRepository.findAllByIdIn(variantIds);
 
-        if (products.size() != productIds.size()) {
-            throw new IllegalArgumentException("One or more products were not found.");
+        if (variants.size() != variantIds.size()) {
+            throw new IllegalArgumentException("One or more product variants were not found.");
         }
 
-        return products.stream()
-                .collect(Collectors.toMap(Product::getId, Function.identity()));
+        return variants.stream()
+                .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
     }
 
-    private void validateProductAvailable(Product product, int requestedQuantity) {
-        if (product.getStatus() != ProductStatus.ACTIVE) {
+    private void validateProductAvailable(
+            Product product,
+            ProductVariant variant,
+            Long requestedProductId,
+            int requestedQuantity) {
+        if (!product.getId().equals(requestedProductId)) {
+            throw new IllegalArgumentException("Variant does not belong to the requested product.");
+        }
+
+        if (product.getStatus() == ProductStatus.ARCHIVED || product.getStatus() == ProductStatus.DRAFT) {
             throw new IllegalStateException("Product is not available.");
         }
 
-        if (product.getStockQuantity() < requestedQuantity) {
+        if (variant.getStatus() != ProductStatus.ACTIVE) {
+            throw new IllegalStateException("Selected product variant is not available.");
+        }
+
+        if (variant.getStockQuantity() < requestedQuantity) {
             throw new IllegalStateException("Not enough stock available.");
         }
     }
 
-    private void reserveStock(Product product, int quantity) {
-        product.setStockQuantity(product.getStockQuantity() - quantity);
+    private void reserveStock(Product product, ProductVariant variant, int quantity) {
+        variant.setStockQuantity(variant.getStockQuantity() - quantity);
 
-        if (product.getStockQuantity() <= 0) {
-            product.setStatus(ProductStatus.OUT_OF_STOCK);
+        if (variant.getStockQuantity() <= 0) {
+            variant.setStatus(ProductStatus.OUT_OF_STOCK);
         }
+
+        syncProductStatus(product);
     }
 
     public void restockReservedItems(Order order) {
@@ -269,19 +301,21 @@ public class OrderService {
                 continue;
             }
 
+            ProductVariant variant = item.getVariant();
             Product product = item.getProduct();
 
-            if (product == null) {
+            if (variant == null || product == null) {
                 continue;
             }
 
-            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
 
-            if (product.getStatus() == ProductStatus.OUT_OF_STOCK
-                    && product.getStockQuantity() > 0) {
-                product.setStatus(ProductStatus.ACTIVE);
+            if (variant.getStatus() == ProductStatus.OUT_OF_STOCK
+                    && variant.getStockQuantity() > 0) {
+                variant.setStatus(ProductStatus.ACTIVE);
             }
 
+            syncProductStatus(product);
             item.setStatus(itemStatus);
         }
     }
@@ -347,5 +381,47 @@ public class OrderService {
 
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String resolveSnapshotImageUrl(Product product, ProductVariant variant) {
+        if (normalizeOptional(variant.getImageUrl()) != null) {
+            return variant.getImageUrl().trim();
+        }
+
+        if (normalizeOptional(product.getMainImageUrl()) != null) {
+            return product.getMainImageUrl().trim();
+        }
+
+        return product.getImages()
+                .stream()
+                .map(image -> normalizeOptional(image.getUrl()))
+                .filter(value -> value != null)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void syncProductStatus(Product product) {
+        product.getVariants().forEach(this::syncVariantStatus);
+
+        boolean hasStock = product.getVariants()
+                .stream()
+                .anyMatch(variant -> variant.getStatus() == ProductStatus.ACTIVE
+                        && variant.getStockQuantity() != null
+                        && variant.getStockQuantity() > 0);
+
+        if (product.getStatus() != ProductStatus.ARCHIVED && product.getStatus() != ProductStatus.DRAFT) {
+            product.setStatus(hasStock ? ProductStatus.ACTIVE : ProductStatus.OUT_OF_STOCK);
+        }
+    }
+
+    private void syncVariantStatus(ProductVariant variant) {
+        if (variant.getStatus() == ProductStatus.ARCHIVED || variant.getStatus() == ProductStatus.DRAFT) {
+            return;
+        }
+
+        variant.setStatus(
+                variant.getStockQuantity() != null && variant.getStockQuantity() > 0
+                        ? ProductStatus.ACTIVE
+                        : ProductStatus.OUT_OF_STOCK);
     }
 }

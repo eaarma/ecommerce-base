@@ -6,7 +6,7 @@ export default function CartPage() {
     <main className="min-h-screen  px-4 py-8">
       <div className="mx-auto max-w-6xl">
         <div className="overflow-hidden rounded-[28px] border border-base-300 bg-base-100 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-          <div className="border-b border-base-300 bg-[linear-gradient(135deg,rgba(224,242,254,0.95)_0%,rgba(249,250,251,0.98)_55%,rgba(236,253,245,0.95)_100%)] px-6 py-8 sm:px-8">
+          <div className="border-b border-base-300 px-6 py-8 sm:px-8">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
               Cart
             </p>

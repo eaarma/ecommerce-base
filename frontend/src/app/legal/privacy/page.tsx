@@ -1,13 +1,33 @@
-export default function PrivacyPolicyPage() {
-  return (
-    <div className="bg-base-100 min-h-screen flex justify-center p-6">
-      <div className="card max-w-3xl w-full bg-base-100 shadow-lg p-8 space-y-6">
-        <h1 className="text-3xl font-bold">Privacy Policy</h1>
+import type { Metadata } from "next";
+import StorePolicyPage from "@/components/store-pages/StorePolicyPage";
+import { getPublicShopOrFallback } from "@/lib/shopService";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+import { getPublicStorePageOrFallback } from "@/lib/storePageService";
 
-        <p className="text-sm opacity-70">
-          Last updated: {new Date().getFullYear()}
-        </p>
-      </div>
-    </div>
+export async function generateMetadata(): Promise<Metadata> {
+  const [shop, privacyPage] = await Promise.all([
+    getPublicShopOrFallback(),
+    getPublicStorePageOrFallback("privacy"),
+  ]);
+
+  return buildStoreMetadata({
+    shop,
+    pageTitle: privacyPage.title,
+    description: privacyPage.description,
+    fallbackDescription: shop.shortDescription,
+  });
+}
+
+export default async function PrivacyPolicyPage() {
+  const privacyPage = await getPublicStorePageOrFallback("privacy");
+
+  return (
+    <StorePolicyPage
+      eyebrow="Legal"
+      title={privacyPage.title}
+      description={privacyPage.description}
+      content={privacyPage.contentJson}
+      closingNote={privacyPage.closingNote}
+    />
   );
 }

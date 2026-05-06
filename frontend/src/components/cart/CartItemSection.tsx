@@ -102,13 +102,13 @@ export default function CartItemSection() {
           <div className="space-y-4">
             {cartItems.map((item) => (
               <CartItem
-                key={item.productId}
+                key={item.lineId}
                 item={item}
                 selected={isSelected(item.selected)}
-                onDecrease={() => dispatch(decreaseQuantity(item.productId))}
-                onIncrease={() => dispatch(increaseQuantity(item.productId))}
-                onRemove={() => dispatch(removeFromCart(item.productId))}
-                onToggle={() => dispatch(toggleItemSelection(item.productId))}
+                onDecrease={() => dispatch(decreaseQuantity(item.lineId))}
+                onIncrease={() => dispatch(increaseQuantity(item.lineId))}
+                onRemove={() => dispatch(removeFromCart(item.lineId))}
+                onToggle={() => dispatch(toggleItemSelection(item.lineId))}
               />
             ))}
           </div>

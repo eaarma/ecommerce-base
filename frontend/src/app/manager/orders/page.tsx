@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import ManagerOrdersSection from "@/components/manager/ManagerOrdersSection";
-import ManagerShell from "@/components/manager/ManagerShell";
-import ManagerStatCard from "@/components/manager/ManagerStatCard";
+import ManagerOrdersSection from "@/components/manager/orders/ManagerOrdersSection";
+import ManagerShell from "@/components/manager/layout/ManagerShell";
+import ManagerStatCard from "@/components/manager/shared/ManagerStatCard";
 import { OrderService } from "@/lib/orderService";
 import type { OrderResponse } from "@/types/order";
 

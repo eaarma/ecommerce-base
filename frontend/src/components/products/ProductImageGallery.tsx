@@ -18,6 +18,8 @@ export default function ProductImageGallery({
   const scrollLeft = useRef(0);
 
   const placeholder = "/images/item_placeholder.jpg";
+  const safeSelectedIndex =
+    images.length === 0 ? 0 : Math.min(selectedIndex, images.length - 1);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     isDragging.current = true;
@@ -41,19 +43,17 @@ export default function ProductImageGallery({
     isDragging.current = false;
   };
 
-  // If no images → use placeholder
-  const mainImage = images.length > 0 ? images[selectedIndex] : placeholder;
+  const mainImage = images.length > 0 ? images[safeSelectedIndex] : placeholder;
   const isPlaceholder = images.length === 0;
 
   return (
-    <div className="flex flex-col gap-3 min-w-0">
-      {/* Main image */}
+    <div className="flex min-w-0 flex-col gap-3">
       <div className="w-full">
         <img
           src={mainImage}
           alt={title || "Product Image"}
-          className={`rounded-xl w-full h-72 lg:h-[420px] object-cover shadow-md ${
-            isPlaceholder ? "opacity-70 grayscale " : ""
+          className={`h-72 w-full rounded-xl object-cover shadow-md lg:h-[420px] ${
+            isPlaceholder ? "grayscale opacity-70" : ""
           }`}
           onError={(e) => {
             const img = e.currentTarget as HTMLImageElement;
@@ -63,7 +63,6 @@ export default function ProductImageGallery({
         />
       </div>
 
-      {/* Thumbnails */}
       {images.length > 1 && (
         <div
           ref={scrollRef}
@@ -71,14 +70,14 @@ export default function ProductImageGallery({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
-          className="flex gap-3 overflow-x-auto pb-2 cursor-grab w-full max-w-full active:cursor-grabbing select-none"
+          className="flex w-full max-w-full cursor-grab select-none gap-3 overflow-x-auto pb-2 active:cursor-grabbing"
         >
           {images.map((img, index) => (
             <div
               key={index}
               onClick={() => setSelectedIndex(index)}
-              className={`relative flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${
-                selectedIndex === index
+              className={`relative flex-shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+                safeSelectedIndex === index
                   ? "border-primary"
                   : "border-transparent hover:border-gray-300"
               }`}
@@ -86,7 +85,7 @@ export default function ProductImageGallery({
               <img
                 src={img}
                 alt={`Thumbnail ${index + 1}`}
-                className="h-20 w-28 object-cover pointer-events-none"
+                className="pointer-events-none h-20 w-28 object-cover"
                 onError={(e) => {
                   const thumb = e.currentTarget as HTMLImageElement;
                   thumb.src = placeholder;

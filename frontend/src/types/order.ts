@@ -60,6 +60,13 @@ export interface OrderItem {
   productSnapshotId: number;
   productSnapshotName: string;
   productSnapshotImageUrl?: string | null;
+  variantSnapshotId: number;
+  variantSnapshotSku: string;
+  variantSnapshotLabel: string;
+  variantSnapshotColor?: string | null;
+  variantSnapshotSize?: string | null;
+  variantSnapshotWeight?: string | null;
+  variantSnapshotMaterial?: string | null;
 
   unitPrice: number;
   quantity: number;
@@ -97,6 +104,7 @@ export interface Order {
 
 export interface ReserveOrderItemRequest {
   productId: number;
+  variantId: number;
   quantity: number;
 }
 

@@ -1,23 +1,32 @@
-export default function FAQPage() {
+import type { Metadata } from "next";
+import StoreFaqPage from "@/components/store-pages/StoreFaqPage";
+import { getPublicShopOrFallback } from "@/lib/shopService";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+import { getPublicStorePageOrFallback } from "@/lib/storePageService";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const [shop, faqPage] = await Promise.all([
+    getPublicShopOrFallback(),
+    getPublicStorePageOrFallback("faq"),
+  ]);
+
+  return buildStoreMetadata({
+    shop,
+    pageTitle: faqPage.title,
+    description: faqPage.description,
+    fallbackDescription: shop.shortDescription,
+  });
+}
+
+export default async function FAQPage() {
+  const faqPage = await getPublicStorePageOrFallback("faq");
+
   return (
-    <div className="bg-base-100 min-h-screen flex justify-center p-6">
-      <div className="card max-w-3xl w-full bg-base-100 shadow-lg p-8 space-y-6">
-        <h1 className="text-3xl font-bold">Frequently Asked Questions</h1>
-
-        <section className="space-y-2">
-          <h2 className="text-xl font-semibold">question1?</h2>
-          <p>answer1</p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-xl font-semibold">question2?</h2>
-          <p>answer2</p>
-        </section>
-
-        <p className="text-sm opacity-70">
-          Last updated: {new Date().getFullYear()}
-        </p>
-      </div>
-    </div>
+    <StoreFaqPage
+      title={faqPage.title}
+      description={faqPage.description}
+      content={faqPage.contentJson}
+      closingNote={faqPage.closingNote}
+    />
   );
 }

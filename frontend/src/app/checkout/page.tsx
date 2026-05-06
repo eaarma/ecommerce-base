@@ -158,6 +158,7 @@ export default function CheckoutPage() {
       },
       items: selectedItems.map((item) => ({
         productId: item.productId,
+        variantId: item.variantId,
         quantity: item.quantity,
       })),
     };
@@ -182,7 +183,7 @@ export default function CheckoutPage() {
     <main className="min-h-screen  px-4 py-8">
       <div className="mx-auto max-w-3xl">
         <div className="overflow-hidden rounded-[28px] border border-base-300 bg-base-100 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-          <div className="border-b border-base-300 bg-[linear-gradient(135deg,rgba(224,242,254,0.95)_0%,rgba(249,250,251,0.98)_55%,rgba(236,253,245,0.95)_100%)] px-6 py-8 sm:px-8">
+          <div className="border-b border-base-300 px-6 py-8 sm:px-8">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary/70">
               Checkout
             </p>
@@ -452,7 +453,7 @@ export default function CheckoutPage() {
                     </label>
 
                     {selectedParcelLocker && (
-                      <div className="rounded-2xl border border-primary/15 bg-base-100 p-4 text-sm shadow-sm">
+                      <div className="rounded-2xl border border-primary/15 bg-base-100 p-4 mt-3 text-sm shadow-sm">
                         <p className="font-semibold text-base-content">
                           {selectedParcelLocker.name}
                         </p>
@@ -463,7 +464,7 @@ export default function CheckoutPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-success/15 bg-success/5 p-4 text-sm leading-6 text-base-content/75">
+                  <div className="rounded-2xl border border-success/15 bg-success/5 p-4 mt-3 text-sm leading-6 text-base-content/75">
                     Postal delivery will use the address from step 2.
                   </div>
                 )}

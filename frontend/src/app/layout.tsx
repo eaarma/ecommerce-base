@@ -5,6 +5,12 @@ import ReduxProvider from "@/providers/ReduxProvider";
 import Footer from "@/components/layout/Footer";
 import { Toaster } from "react-hot-toast";
 import Header from "@/components/layout/Header";
+import { getPublicShopOrFallback } from "@/lib/shopService";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+import {
+  buildStoreThemeStyle,
+  STOREFRONT_THEME_NAME,
+} from "@/lib/storeTheme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,28 +22,39 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Ecommerce Store",
-  description: "We sell goods.",
-  icons: {
-    icon: "data:,",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const shop = await getPublicShopOrFallback();
+  const metadata = buildStoreMetadata({
+    shop,
+    fallbackDescription: shop.shortDescription,
+  });
 
-export default function RootLayout({
+  return {
+    ...metadata,
+    icons: {
+      icon: shop.faviconUrl?.trim() || "data:,",
+    },
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const shop = await getPublicShopOrFallback();
+  const storeThemeStyle = buildStoreThemeStyle(shop);
+
   return (
     <html
       lang="en"
-      data-theme="light_custom"
+      data-theme={STOREFRONT_THEME_NAME}
+      style={storeThemeStyle}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body>
+      <body className="min-h-full bg-base-100 text-base-content">
         <ReduxProvider>
-          <Header />
+          <Header shop={shop} />
           <main className="flex-grow">
             <div className="page-container">{children}</div>
           </main>
@@ -47,7 +64,7 @@ export default function RootLayout({
               top: "5rem",
             }}
           />
-          <Footer />
+          <Footer shop={shop} />
         </ReduxProvider>
       </body>
     </html>

@@ -114,7 +114,7 @@ export default function ConfirmationPage() {
     <main className="min-h-screen  px-4 py-8">
       <div className="mx-auto max-w-6xl">
         <div className="overflow-hidden rounded-[28px] border border-base-300 bg-base-100 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-          <div className="border-b border-base-300 bg-[linear-gradient(135deg,rgba(220,252,231,0.96)_0%,rgba(249,250,251,0.98)_50%,rgba(224,242,254,0.95)_100%)] px-6 py-8 sm:px-8">
+          <div className="border-b border-base-300 px-6 py-8 sm:px-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-success/80">
@@ -250,6 +250,11 @@ export default function ConfirmationPage() {
                           <p className="font-medium text-base-content">
                             {item.productSnapshotName}
                           </p>
+                          {item.variantSnapshotLabel !== "Default" && (
+                            <p className="mt-1 text-sm text-base-content/60">
+                              {item.variantSnapshotLabel}
+                            </p>
+                          )}
                           <p className="mt-1 text-sm text-base-content/60">
                             {item.quantity} x{" "}
                             {formatMoney(item.unitPrice, order.currency)}
@@ -266,7 +271,7 @@ export default function ConfirmationPage() {
             </div>
 
             <aside className="h-fit lg:sticky lg:top-8">
-              <section className="space-y-6 rounded-[24px] border border-base-300 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(240,253,244,0.88)_100%)] p-6 shadow-sm">
+              <section className="space-y-6 rounded-[24px] border border-base-300 p-6 shadow-sm">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-content">
                     3

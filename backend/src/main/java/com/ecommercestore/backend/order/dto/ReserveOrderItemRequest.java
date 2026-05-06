@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 
 public record ReserveOrderItemRequest(
         @NotNull Long productId,
+        @NotNull Long variantId,
         @NotNull @Min(1) Integer quantity
 ) {
 }

@@ -69,11 +69,11 @@ export default function CartItem({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex gap-4">
           <label
-            htmlFor={`cart-item-${item.productId}`}
+            htmlFor={`cart-item-${item.lineId}`}
             className="flex cursor-pointer items-start pt-1"
           >
             <input
-              id={`cart-item-${item.productId}`}
+              id={`cart-item-${item.lineId}`}
               type="checkbox"
               checked={selected}
               onChange={onToggle}
@@ -98,6 +98,11 @@ export default function CartItem({
                 >
                   {item.name}
                 </Link>
+                {item.variantLabel !== "Default" && (
+                  <p className="mt-1 text-sm text-base-content/70">
+                    {item.variantLabel}
+                  </p>
+                )}
                 <p className="mt-1 text-sm text-base-content/65">
                   {formatPrice(item.price)} each
                 </p>

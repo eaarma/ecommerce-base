@@ -32,7 +32,7 @@ export default function CartTotalSection() {
 
   return (
     <aside className="h-fit lg:sticky lg:top-8">
-      <section className="space-y-6 rounded-[24px] border border-base-300 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(240,249,255,0.88)_100%)] p-6 shadow-sm">
+      <section className="space-y-6 rounded-[24px] border border-base-300 p-6 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-content">
             2

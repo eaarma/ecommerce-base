@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import DashboardSection from "@/components/manager/DashboardSection";
-import ManagerShell from "@/components/manager/ManagerShell";
+import DashboardSection from "@/components/manager/dashboard/DashboardSection";
+import ManagerShell from "@/components/manager/layout/ManagerShell";
 import { ManagerProductService } from "@/lib/managerProductService";
 import { OrderService } from "@/lib/orderService";
 import { PaymentService } from "@/lib/paymentService";

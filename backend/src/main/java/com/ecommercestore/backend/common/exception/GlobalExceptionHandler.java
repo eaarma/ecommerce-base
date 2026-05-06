@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.MailException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -59,6 +60,18 @@ public class GlobalExceptionHandler {
                 return ResponseEntity
                                 .status(HttpStatus.FORBIDDEN)
                                 .body(ErrorResponse.single("Forbidden", ex.getMessage()));
+        }
+
+        @ExceptionHandler(MailException.class)
+        public ResponseEntity<ErrorResponse> handleMailFailure(
+                        MailException ex) {
+                log.error("Email delivery failed", ex);
+
+                return ResponseEntity
+                                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body(ErrorResponse.single(
+                                                "Email unavailable",
+                                                "Unable to send email right now. Please try again later."));
         }
 
         @ExceptionHandler(NoSuchElementException.class)

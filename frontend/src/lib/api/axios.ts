@@ -7,15 +7,48 @@ import toast from "react-hot-toast";
 
 import { store } from "@/store/store";
 import { clearAuth } from "@/store/authSlice";
+import {
+  getStoredAccessToken,
+  getStoredAuthUser,
+  handleExpiredSession,
+  isJwtExpired,
+  isStaffRole,
+} from "@/lib/authSession";
 
 const NETWORK_ERROR_TOAST_ID = "network-error";
+const MANAGER_API_PREFIX = "/api/manager";
 
 export interface ApiErrorData {
   message?: string;
+  messages?: string[];
   error?: string;
   status?: number;
   timestamp?: string;
   path?: string;
+}
+
+function getApiErrorMessage(data?: ApiErrorData | unknown): string {
+  if (typeof data !== "object" || data === null) {
+    return "Request failed";
+  }
+
+  if ("message" in data && typeof data.message === "string") {
+    return data.message;
+  }
+
+  if (
+    "messages" in data &&
+    Array.isArray(data.messages) &&
+    typeof data.messages[0] === "string"
+  ) {
+    return data.messages[0];
+  }
+
+  if ("error" in data && typeof data.error === "string") {
+    return data.error;
+  }
+
+  return "Request failed";
 }
 
 export class ApiError extends Error {
@@ -23,15 +56,7 @@ export class ApiError extends Error {
   data?: ApiErrorData | unknown;
 
   constructor(status: number, data?: ApiErrorData | unknown) {
-    const message =
-      typeof data === "object" &&
-      data !== null &&
-      "message" in data &&
-      typeof (data as { message?: unknown }).message === "string"
-        ? (data as { message: string }).message
-        : "Request failed";
-
-    super(message);
+    super(getApiErrorMessage(data));
     this.name = "ApiError";
     this.status = status;
     this.data = data;
@@ -58,10 +83,16 @@ api.interceptors.request.use(
     const headers = AxiosHeaders.from(config.headers);
 
     const accessToken =
-      store.getState().auth.accessToken ??
-      (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null);
+      store.getState().auth.accessToken ?? getStoredAccessToken();
 
     if (accessToken) {
+      if (isJwtExpired(accessToken)) {
+        handleExpiredSession();
+        return Promise.reject(
+          new ApiError(401, { message: "Session is expired" }),
+        );
+      }
+
       headers.set("Authorization", `Bearer ${accessToken}`);
     }
 
@@ -87,6 +118,26 @@ api.interceptors.response.use(
 
     const status = response.status;
     const data = response.data;
+    const authState = store.getState().auth;
+    const accessToken = authState.accessToken ?? getStoredAccessToken();
+    const user = authState.user ?? getStoredAuthUser();
+    const requestUrl = error.config?.url ?? "";
+    const isManagerRequest = requestUrl.startsWith(MANAGER_API_PREFIX);
+
+    if (status === 401 && accessToken) {
+      handleExpiredSession();
+      return Promise.reject(new ApiError(status, data));
+    }
+
+    if (
+      status === 403 &&
+      isManagerRequest &&
+      accessToken &&
+      isStaffRole(user?.role)
+    ) {
+      handleExpiredSession();
+      return Promise.reject(new ApiError(status, data));
+    }
 
     if (status === 401) {
       store.dispatch(clearAuth());
@@ -94,15 +145,7 @@ api.interceptors.response.use(
 
     switch (status) {
       case 400: {
-        const message =
-          typeof data === "object" &&
-          data !== null &&
-          "message" in data &&
-          typeof (data as { message?: unknown }).message === "string"
-            ? (data as { message: string }).message
-            : "Bad request.";
-
-        toast.error(message);
+        toast.error(getApiErrorMessage(data as ApiErrorData | unknown));
         break;
       }
 
@@ -120,6 +163,10 @@ api.interceptors.response.use(
 
       case 500:
         toast.error("Server error. Please try again later.");
+        break;
+
+      case 503:
+        toast.error(getApiErrorMessage(data as ApiErrorData | unknown));
         break;
 
       default:
