@@ -107,6 +107,16 @@ export const OrderService = {
     return res.data;
   },
 
+  cancelManagerOrderItemWithoutRefund: async (
+    orderId: number,
+    orderItemId: number,
+  ): Promise<OrderResponse> => {
+    const res = await api.post(
+      `/api/manager/orders/${orderId}/items/${orderItemId}/cancel-without-refund`,
+    );
+    return res.data;
+  },
+
   getManagerOrderRefunds: async (
     orderId: number,
   ): Promise<RefundResponseDto[]> => {

@@ -16,6 +16,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.ecommercestore.backend.security.filters.GlobalRateLimitFilter;
 import com.ecommercestore.backend.security.jwt.JwtAuthenticationFilter;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class SecurityConfig {
 
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final GlobalRateLimitFilter globalRateLimitFilter;
 
         @Bean
         public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -45,29 +47,47 @@ public class SecurityConfig {
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers("/error").permitAll()
 
-                                                .requestMatchers("/api/auth/**").permitAll()
-                                                .requestMatchers("/api/public/**").permitAll()
-                                                .requestMatchers("/api/store/shop").permitAll()
-                                                .requestMatchers("/api/store/homepage").permitAll()
-                                                .requestMatchers("/api/store/pages/**").permitAll()
-                                                .requestMatchers("/api/products/**").permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/public/contact").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/store/shop").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/store/homepage").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/store/pages/**").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**")
+                                                .permitAll()
                                                 .requestMatchers("/uploads/**").permitAll()
-                                                .requestMatchers("/api/checkout/**").permitAll()
-                                                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/checkout/orders/reserve")
+                                                .permitAll()
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/checkout/orders/*/finalize",
+                                                                "/api/checkout/orders/*/pay-placeholder",
+                                                                "/api/checkout/orders/*/cancel")
+                                                .permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/checkout/orders/*").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**")
+                                                .permitAll()
 
                                                 .requestMatchers(HttpMethod.POST,
+                                                                "/api/orders/*/payments",
                                                                 "/api/orders/*/payments/stripe/intent",
+                                                                "/api/orders/*/payments/stripe/start",
                                                                 "/api/orders/*/payments/stripe/confirm",
                                                                 "/api/payments/stripe/webhook")
                                                 .permitAll()
 
                                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                                                .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER")
+                                                .requestMatchers(
+                                                                "/api/manager/products/**",
+                                                                "/api/manager/orders/**",
+                                                                "/api/manager/payments/**",
+                                                                "/api/manager/store/**")
+                                                .hasAnyRole("ADMIN", "MANAGER")
 
                                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                                                 .anyRequest().authenticated())
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterAfter(globalRateLimitFilter, JwtAuthenticationFilter.class)
                                 .build();
         }
 

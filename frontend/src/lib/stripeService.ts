@@ -15,6 +15,15 @@ export const StripeService = {
     return res.data;
   },
 
+  startPayment: async (
+    orderId: number,
+    reservationToken: string,
+  ): Promise<void> => {
+    await api.post(`/api/orders/${orderId}/payments/stripe/start`, null, {
+      params: { token: reservationToken },
+    });
+  },
+
   confirmIntent: async (
     orderId: number,
     reservationToken: string,

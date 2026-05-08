@@ -20,6 +20,7 @@ import com.ecommercestore.backend.payment.Payment;
 import com.ecommercestore.backend.payment.PaymentRepository;
 import com.ecommercestore.backend.payment.PaymentService;
 import com.ecommercestore.backend.payment.PaymentStatus;
+import com.ecommercestore.backend.payment.dto.PaymentResponse;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,6 +37,11 @@ public class StripeService {
         private final OrderService orderService;
 
         @Transactional
+        public void beginPaymentSubmission(Long orderId, String token) {
+                orderService.beginPaymentSubmission(orderId, token);
+        }
+
+        @Transactional
         public StripePaymentIntentResponse createPaymentIntent(Long orderId, String token) {
                 Payment payment = paymentService.createOrReusePendingPaymentEntity(orderId, token);
                 Order order = payment.getOrder();
@@ -50,13 +56,17 @@ public class StripeService {
                                                 .retrieve(payment.getProviderPaymentIntentId());
 
                                 if ("succeeded".equals(existingIntent.getStatus())) {
+                                        PaymentResponse updatedPayment = paymentService.markSucceeded(
+                                                        existingIntent.getId(),
+                                                        existingIntent.getLatestCharge());
+
                                         return new StripePaymentIntentResponse(
                                                         payment.getId(),
                                                         order.getId(),
                                                         null,
                                                         payment.getAmount(),
                                                         payment.getCurrency(),
-                                                        PaymentStatus.SUCCEEDED);
+                                                        updatedPayment.status());
                                 }
 
                                 if ("canceled".equals(existingIntent.getStatus())) {
@@ -138,7 +148,9 @@ public class StripeService {
                         PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
 
                         if ("succeeded".equals(intent.getStatus())) {
-                                paymentService.markSucceeded(intent.getId(), intent.getLatestCharge());
+                                PaymentResponse updatedPayment = paymentService.markSucceeded(
+                                                intent.getId(),
+                                                intent.getLatestCharge());
 
                                 return new StripePaymentIntentResponse(
                                                 payment.getId(),
@@ -146,11 +158,11 @@ public class StripeService {
                                                 null,
                                                 payment.getAmount(),
                                                 payment.getCurrency(),
-                                                PaymentStatus.SUCCEEDED);
+                                                updatedPayment.status());
                         }
 
                         if ("canceled".equals(intent.getStatus())) {
-                                paymentService.markFailed(
+                                PaymentResponse updatedPayment = paymentService.markFailed(
                                                 intent.getId(),
                                                 intent.getCancellationReason(),
                                                 "Stripe payment status: " + intent.getStatus());
@@ -161,7 +173,7 @@ public class StripeService {
                                                 null,
                                                 payment.getAmount(),
                                                 payment.getCurrency(),
-                                                PaymentStatus.FAILED);
+                                                updatedPayment.status());
                         }
 
                         return new StripePaymentIntentResponse(

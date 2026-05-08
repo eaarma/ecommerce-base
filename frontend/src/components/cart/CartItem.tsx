@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
 
-import type { CartItem as CartLineItem } from "@/store/cartSlice";
+import {
+  isPurchasableCartItem,
+  type CartItem as CartLineItem,
+} from "@/store/cartSlice";
 
 type CartItemProps = {
   item: CartLineItem;
@@ -24,6 +27,13 @@ const formatPrice = (price: number) => currencyFormatter.format(price);
 const placeholder = "/images/item_placeholder.jpg";
 
 const getStockBadge = (item: CartLineItem) => {
+  if (item.status === "ARCHIVED") {
+    return {
+      className: "border-error/20 bg-error/10 text-error",
+      label: "Unavailable",
+    };
+  }
+
   if (item.status === "OUT_OF_STOCK" || item.stockQuantity <= 0) {
     return {
       className: "border-error/20 bg-error/10 text-error",
@@ -57,6 +67,7 @@ export default function CartItem({
     : `url(${placeholder})`;
   const itemTotal = item.price * item.quantity;
   const stockBadge = getStockBadge(item);
+  const isPurchasable = isPurchasableCartItem(item);
 
   return (
     <article
@@ -72,15 +83,16 @@ export default function CartItem({
             htmlFor={`cart-item-${item.lineId}`}
             className="flex cursor-pointer items-start pt-1"
           >
-            <input
-              id={`cart-item-${item.lineId}`}
-              type="checkbox"
-              checked={selected}
-              onChange={onToggle}
-              className="checkbox checkbox-primary"
-              aria-label={`Select ${item.name}`}
-            />
-          </label>
+              <input
+                id={`cart-item-${item.lineId}`}
+                type="checkbox"
+                checked={selected}
+                onChange={onToggle}
+                className="checkbox checkbox-primary"
+                aria-label={`Select ${item.name}`}
+                disabled={!isPurchasable}
+              />
+            </label>
 
           <div
             role="img"
@@ -124,6 +136,12 @@ export default function CartItem({
                   {stockBadge.label}
                 </span>
               </div>
+
+              {item.availabilityIssue && (
+                <div className="mt-3 rounded-2xl border border-warning/20 bg-warning/10 px-3 py-2 text-sm leading-6 text-base-content/75">
+                  {item.availabilityIssue}
+                </div>
+              )}
             </div>
           </div>
         </div>

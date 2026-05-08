@@ -20,6 +20,7 @@ export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   NOT_READY: "Not ready",
   READY_TO_SHIP: "Ready to ship",
   SHIPPED: "Shipped",
+  SENT_BACK: "Sent back",
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
 };

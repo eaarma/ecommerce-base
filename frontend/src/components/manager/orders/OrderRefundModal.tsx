@@ -7,7 +7,12 @@ import type { OrderItem, OrderResponse } from "@/types/order";
 
 export type RefundAction =
   | { type: "full" }
-  | { type: "item"; item: OrderItem; maxQuantity: number };
+  | {
+      type: "item";
+      item: OrderItem;
+      maxQuantity: number;
+      allowRefundToggle: boolean;
+    };
 
 type OrderRefundModalProps = {
   order: OrderResponse;
@@ -15,12 +20,14 @@ type OrderRefundModalProps = {
   refundAmount: number;
   refundQuantity: number;
   refundReason: string;
+  refundEnabled: boolean;
   refundError: string | null;
   submitting: boolean;
   onClose: () => void;
   onSubmit: () => void;
   onQuantityChange: (quantity: number) => void;
   onReasonChange: (reason: string) => void;
+  onRefundToggleChange: (enabled: boolean) => void;
 };
 
 const formatMoney = (amount: number, currency: string) =>
@@ -35,14 +42,21 @@ export default function OrderRefundModal({
   refundAmount,
   refundQuantity,
   refundReason,
+  refundEnabled,
   refundError,
   submitting,
   onClose,
   onSubmit,
   onQuantityChange,
   onReasonChange,
+  onRefundToggleChange,
 }: OrderRefundModalProps) {
   if (!refundAction) return null;
+
+  const isItemAction = refundAction.type === "item";
+  const isRefunding = refundAction.type === "full" || refundEnabled;
+  const showRefundToggle = isItemAction && refundAction.allowRefundToggle;
+  const showQuantityInput = isItemAction && refundEnabled;
 
   return (
     <Modal
@@ -55,17 +69,39 @@ export default function OrderRefundModal({
           <h3 className="text-xl font-semibold text-base-content">
             {refundAction.type === "full"
               ? "Cancel/refund order"
-              : "Cancel/refund item"}
+              : refundEnabled
+                ? "Cancel/refund item"
+                : "Cancel item"}
           </h3>
           <p className="mt-1 text-sm text-base-content/60">
             {refundAction.type === "full"
               ? `Refund ${formatMoney(refundAmount, order.currency)} for order #${order.id}.`
-              : `${refundAction.item.productSnapshotName} for ${formatMoney(
-                  refundAmount,
-                  order.currency,
-                )}.`}
+              : refundEnabled
+                ? `${refundAction.item.productSnapshotName} for ${formatMoney(
+                    refundAmount,
+                    order.currency,
+                  )}.`
+                : `Cancel the full ${refundAction.item.productSnapshotName} line without issuing a refund.`}
           </p>
         </div>
+
+        {showRefundToggle && (
+          <div className="flex items-center justify-between rounded-lg border border-base-300 bg-base-200 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-base-content">Refund</p>
+              <p className="text-xs text-base-content/60">
+                Turn this off to cancel the item without sending money back.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              className="toggle toggle-error"
+              checked={refundEnabled}
+              onChange={(event) => onRefundToggleChange(event.target.checked)}
+              disabled={submitting}
+            />
+          </div>
+        )}
 
         <div className="rounded-lg border border-base-300 bg-base-200 p-4">
           <div className="flex items-center justify-between gap-4 text-sm">
@@ -77,7 +113,7 @@ export default function OrderRefundModal({
         </div>
 
         <div className="grid gap-4 md:grid-cols-[160px_1fr]">
-          {refundAction.type === "item" && (
+          {showQuantityInput && (
             <label className="form-control">
               <span className="mb-1 block text-left text-sm font-medium text-base-content">
                 Quantity
@@ -95,7 +131,9 @@ export default function OrderRefundModal({
 
           <label
             className={`form-control ${
-              refundAction.type === "full" ? "md:col-span-2" : ""
+              refundAction.type === "full" || !showQuantityInput
+                ? "md:col-span-2"
+                : ""
             }`}
           >
             <span className="mb-1 block text-left text-sm font-medium text-base-content">
@@ -132,7 +170,13 @@ export default function OrderRefundModal({
             disabled={submitting}
           >
             <RotateCcw size={16} aria-hidden="true" />
-            {submitting ? "Refunding..." : "Confirm refund"}
+            {submitting
+              ? isRefunding
+                ? "Refunding..."
+                : "Cancelling..."
+              : isRefunding
+                ? "Confirm refund"
+                : "Confirm cancellation"}
           </button>
         </div>
       </div>

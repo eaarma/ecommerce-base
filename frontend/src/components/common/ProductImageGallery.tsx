@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useMemo, useState } from "react";
 
 export type ProductImageGalleryItem = {
   id?: number | string;
@@ -27,16 +29,14 @@ export default function ProductImageGallery({
     [images],
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  useEffect(() => {
-    if (selectedIndex > normalizedImages.length - 1) {
-      setSelectedIndex(Math.max(normalizedImages.length - 1, 0));
-    }
-  }, [normalizedImages.length, selectedIndex]);
+  const safeSelectedIndex =
+    normalizedImages.length === 0
+      ? 0
+      : Math.min(selectedIndex, normalizedImages.length - 1);
 
   const activeImage =
     normalizedImages.length > 0
-      ? normalizedImages[selectedIndex]
+      ? normalizedImages[safeSelectedIndex]
       : {
           id: "placeholder",
           imageUrl: placeholderSrc,
@@ -67,7 +67,7 @@ export default function ProductImageGallery({
               key={image.id ?? `${image.imageUrl}-${index}`}
               type="button"
               className={`group relative overflow-hidden rounded-2xl border text-left transition ${
-                index === selectedIndex
+                index === safeSelectedIndex
                   ? "border-primary shadow-[0_12px_30px_rgba(15,23,42,0.12)]"
                   : "border-base-300 hover:border-primary/40"
               }`}

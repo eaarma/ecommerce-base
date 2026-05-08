@@ -1,12 +1,13 @@
 "use client";
 
 import { CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 interface Props {
   clientSecret: string;
   amount: number;
   currency?: string;
+  onBeforePay: () => Promise<void>;
   onSuccess: (paymentIntentId: string) => void;
   onError: (msg: string) => void;
 }
@@ -15,6 +16,7 @@ export default function StripePaymentForm({
   clientSecret,
   amount,
   currency = "EUR",
+  onBeforePay,
   onSuccess,
   onError,
 }: Props) {
@@ -22,6 +24,7 @@ export default function StripePaymentForm({
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const submitLockRef = useRef(false);
 
   const formattedAmount = useMemo(
     () =>
@@ -33,8 +36,9 @@ export default function StripePaymentForm({
   );
 
   const handlePay = async () => {
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || submitLockRef.current) return;
 
+    submitLockRef.current = true;
     setLoading(true);
     setErrorMsg(null);
 
@@ -43,31 +47,42 @@ export default function StripePaymentForm({
       const message = "Card input missing";
       setErrorMsg(message);
       onError(message);
+      submitLockRef.current = false;
       setLoading(false);
       return;
     }
 
-    const result = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: { card },
-    });
+    try {
+      await onBeforePay();
 
-    setLoading(false);
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card },
+      });
 
-    if (result.error) {
-      const message = result.error.message || "Payment failed";
+      if (result.error) {
+        const message = result.error.message || "Payment failed";
+        setErrorMsg(message);
+        onError(message);
+        return;
+      }
+
+      if (result.paymentIntent?.status === "succeeded") {
+        onSuccess(result.paymentIntent.id);
+        return;
+      }
+
+      const message = "Payment is not complete yet";
       setErrorMsg(message);
       onError(message);
-      return;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Payment failed";
+      setErrorMsg(message);
+      onError(message);
+    } finally {
+      submitLockRef.current = false;
+      setLoading(false);
     }
-
-    if (result.paymentIntent?.status === "succeeded") {
-      onSuccess(result.paymentIntent.id);
-      return;
-    }
-
-    const message = "Payment is not complete yet";
-    setErrorMsg(message);
-    onError(message);
   };
 
   return (

@@ -6,13 +6,14 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
 public record ReserveOrderRequest(
-        @NotBlank @Email String customerEmail,
-        @NotBlank String customerFirstName,
-        @NotBlank String customerLastName,
+        @NotBlank @Email @Size(max = 320) String customerEmail,
+        @NotBlank @Size(max = 120) String customerFirstName,
+        @NotBlank @Size(max = 120) String customerLastName,
         @NotNull @Valid ReserveDeliveryRequest delivery,
         @NotEmpty @Valid List<ReserveOrderItemRequest> items
 ) {

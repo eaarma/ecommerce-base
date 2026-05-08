@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 
 @Configuration
 @RequiredArgsConstructor
@@ -24,10 +25,11 @@ public class StripeConfig {
         }
 
         String apiKey = stripeProperties.getApiKey();
+        String webhookSecret = stripeProperties.getWebhookSecret();
 
-        if (apiKey == null || apiKey.isBlank()) {
+        if (!StringUtils.hasText(apiKey) || !StringUtils.hasText(webhookSecret)) {
             throw new IllegalStateException(
-                    "Stripe API key is not configured");
+                    "Stripe API key and webhook secret must be configured when Stripe is enabled");
         }
 
         Stripe.apiKey = apiKey;

@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ecommercestore.backend.order.OrderService;
 import com.ecommercestore.backend.payment.dto.PaymentResponse;
 import com.ecommercestore.backend.order.Order;
+import com.ecommercestore.backend.order.OrderStatus;
 
 import java.time.Instant;
 import java.util.List;
@@ -16,6 +17,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
+
+    private static final String LATE_SUCCESS_REVIEW_MESSAGE =
+            "Stripe payment succeeded after the order hold expired and requires manual review.";
 
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
@@ -53,7 +57,19 @@ public class PaymentService {
         Payment payment = paymentRepository.findByProviderPaymentIntentId(providerPaymentIntentId)
                 .orElseThrow(() -> new EntityNotFoundException("Payment not found"));
 
-        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED
+                || payment.getStatus() == PaymentStatus.SUCCEEDED_REQUIRES_REVIEW) {
+            return paymentMapper.toResponse(payment);
+        }
+
+        Order order = payment.getOrder();
+
+        if (requiresManualReview(order)) {
+            payment.setStatus(PaymentStatus.SUCCEEDED_REQUIRES_REVIEW);
+            payment.setProviderChargeId(providerChargeId);
+            payment.setFailureCode("payment_requires_review");
+            payment.setFailureMessage(LATE_SUCCESS_REVIEW_MESSAGE);
+            payment.setPaidAt(Instant.now());
             return paymentMapper.toResponse(payment);
         }
 
@@ -63,7 +79,7 @@ public class PaymentService {
         payment.setFailureMessage(null);
         payment.setPaidAt(Instant.now());
 
-        orderService.markPaid(payment.getOrder().getId());
+        orderService.markPaid(order.getId());
 
         return paymentMapper.toResponse(payment);
     }
@@ -76,7 +92,8 @@ public class PaymentService {
         Payment payment = paymentRepository.findByProviderPaymentIntentId(providerPaymentIntentId)
                 .orElseThrow(() -> new EntityNotFoundException("Payment not found"));
 
-        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED
+                || payment.getStatus() == PaymentStatus.SUCCEEDED_REQUIRES_REVIEW) {
             return paymentMapper.toResponse(payment);
         }
 
@@ -148,6 +165,21 @@ public class PaymentService {
                                 .amount(order.getTotal())
                                 .currency(order.getCurrency())
                                 .build()));
+    }
+
+    private boolean requiresManualReview(Order order) {
+        if (order.getStatus() == OrderStatus.PAID) {
+            return false;
+        }
+
+        if (order.getStatus() == OrderStatus.EXPIRED
+                || order.getStatus() == OrderStatus.CANCELLED
+                || order.getStatus() == OrderStatus.CANCELLED_REFUNDED
+                || order.getStatus() == OrderStatus.REFUNDED) {
+            return true;
+        }
+
+        return order.getExpiresAt() != null && !order.getExpiresAt().isAfter(Instant.now());
     }
 
 }

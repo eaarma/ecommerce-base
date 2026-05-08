@@ -10,17 +10,29 @@ import {
   Store,
   Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { useSelector } from "react-redux";
 
-const managerNavItems = [
+import { getStoredAuthUser } from "@/lib/authSession";
+import type { RootState } from "@/store/store";
+
+type ManagerNavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+};
+
+const managerNavItems: ManagerNavItem[] = [
   { href: "/manager", label: "Dashboard", icon: LayoutDashboard },
   { href: "/manager/orders", label: "Orders", icon: BarChart3 },
   { href: "/manager/payments", label: "Payments", icon: CreditCard },
   { href: "/manager/products", label: "Products", icon: Boxes },
   { href: "/manager/store", label: "Store", icon: Store },
-  { href: "/manager/users", label: "Users", icon: Users },
-] as const;
+  { href: "/manager/users", label: "Users", icon: Users, adminOnly: true },
+];
 
 export default function ManagerShell({
   title,
@@ -33,10 +45,15 @@ export default function ManagerShell({
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const authUser = useSelector((state: RootState) => state.auth.user);
+  const resolvedUser = authUser ?? getStoredAuthUser();
+  const visibleNavItems = managerNavItems.filter(
+    (item) => !item.adminOnly || resolvedUser?.role === "ADMIN",
+  );
 
   const nav = (
     <nav aria-label="Manager sections" className="flex flex-col gap-1">
-      {managerNavItems.map((item) => {
+      {visibleNavItems.map((item) => {
         const active =
           item.href === "/manager"
             ? pathname === item.href

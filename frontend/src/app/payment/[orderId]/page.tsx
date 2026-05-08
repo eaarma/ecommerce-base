@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch } from "react-redux";
 import toast from "react-hot-toast";
 
 import Modal from "@/components/common/Modal";
+import { ApiError } from "@/lib/api/axios";
 import StripePaymentForm from "@/components/payment/StripePaymentForm";
 import { OrderService } from "@/lib/orderService";
 import { StripeService } from "@/lib/stripeService";
@@ -34,6 +35,19 @@ const formatCountdown = (value: number) =>
 const getOrderIdParam = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
+const getFinalizedExpiry = (createdAt?: string | null) => {
+  if (!createdAt) {
+    return null;
+  }
+
+  return new Date(
+    new Date(createdAt).getTime() + 20 * 60 * 1000,
+  ).toISOString();
+};
+
+const isPayableStatus = (status: OrderResponse["status"]) =>
+  status === "RESERVED" || status === "FINALIZED" || status === "PAYMENT_FAILED";
+
 export default function PaymentPage() {
   const params = useParams();
   const router = useRouter();
@@ -51,11 +65,12 @@ export default function PaymentPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isWaitingForWebhook, setIsWaitingForWebhook] = useState(false);
   const [expiresIn, setExpiresIn] = useState(0);
+  const [manualReviewMessage, setManualReviewMessage] = useState<string | null>(
+    null,
+  );
+  const preparePaymentLockRef = useRef(false);
 
-  const isPayable =
-    order?.status === "RESERVED" ||
-    order?.status === "FINALIZED" ||
-    order?.status === "PAYMENT_FAILED";
+  const isPayable = order ? isPayableStatus(order.status) : false;
 
   const contactName = useMemo(() => {
     if (!order) return "";
@@ -91,17 +106,26 @@ export default function PaymentPage() {
           setExpiresIn(Math.max(0, seconds));
         }
 
-        if (
-          data.status !== "RESERVED" &&
-          data.status !== "FINALIZED" &&
-          data.status !== "PAYMENT_FAILED" &&
-          data.status !== "PAID"
-        ) {
-          toast.error("Order is not payable");
+        if (data.status === "EXPIRED") {
+          toast.error("Reservation expired. Please review your cart.");
           router.replace("/cart");
+          return;
         }
-      } catch {
+
+        if (!isPayableStatus(data.status) && data.status !== "PAID") {
+          toast.error("This order can no longer be paid.");
+          router.replace("/cart");
+          return;
+        }
+
+      } catch (error) {
         if (cancelled) return;
+
+        if (error instanceof ApiError) {
+          router.replace("/cart");
+          return;
+        }
+
         toast.error("Order not found");
         router.replace("/cart");
       } finally {
@@ -119,7 +143,7 @@ export default function PaymentPage() {
   }, [orderId, reservationToken, router]);
 
   useEffect(() => {
-    if (!order?.expiresAt || order.status !== "RESERVED") return;
+    if (!order?.expiresAt || !isPayableStatus(order.status)) return;
 
     const interval = window.setInterval(() => {
       setExpiresIn((current) => {
@@ -147,8 +171,71 @@ export default function PaymentPage() {
     );
   }, [order, router]);
 
+  const handleManualReviewRequired = (message?: string) => {
+    const reviewMessage =
+      message ??
+      "Payment was received after the order hold expired. Our team will review it manually.";
+
+    setPaymentIntent(null);
+    setIsPaymentModalOpen(false);
+    setManualReviewMessage(reviewMessage);
+    setOrder((current) =>
+      current
+        ? {
+            ...current,
+            status: "EXPIRED",
+            expiresAt: null,
+          }
+        : current,
+    );
+    toast.error(reviewMessage);
+  };
+
+  const handleBeforePaymentStart = async () => {
+    try {
+      await StripeService.startPayment(orderId, reservationToken);
+      const finalizedExpiry = order?.createdAt
+        ? getFinalizedExpiry(order.createdAt)
+        : null;
+
+      setOrder((current) =>
+        current
+          ? {
+              ...current,
+              status: "FINALIZED",
+              expiresAt: finalizedExpiry ?? current.expiresAt,
+            }
+          : current,
+      );
+
+      if (finalizedExpiry) {
+        setExpiresIn(
+          Math.max(
+            0,
+            Math.floor((new Date(finalizedExpiry).getTime() - Date.now()) / 1000),
+          ),
+        );
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setOrder((current) =>
+          current
+            ? {
+                ...current,
+                status: "EXPIRED",
+                expiresAt: null,
+              }
+            : current,
+        );
+        setExpiresIn(0);
+      }
+
+      throw error;
+    }
+  };
+
   const handleOpenPaymentModal = async () => {
-    if (!order || !isPayable) return;
+    if (!order || !isPayable || preparePaymentLockRef.current) return;
 
     if (paymentIntent) {
       setIsPaymentModalOpen(true);
@@ -156,13 +243,19 @@ export default function PaymentPage() {
     }
 
     try {
+      preparePaymentLockRef.current = true;
       setIsPreparingPayment(true);
       const intent = await StripeService.createIntent(
         order.id,
         order.reservationToken,
       );
 
-      if (intent.status === "SUCCEEDED" || !intent.clientSecret) {
+      if (intent.status === "SUCCEEDED_REQUIRES_REVIEW") {
+        handleManualReviewRequired();
+        return;
+      }
+
+      if (intent.status === "SUCCEEDED") {
         const paidOrder = await waitForPaidOrder();
 
         if (paidOrder) {
@@ -183,10 +276,23 @@ export default function PaymentPage() {
             }
           : current,
       );
+
+      if (!intent.clientSecret) {
+        toast.error("Failed to prepare payment");
+        return;
+      }
+
+      setManualReviewMessage(null);
       setIsPaymentModalOpen(true);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        router.replace("/cart");
+        return;
+      }
+
       toast.error("Failed to prepare payment");
     } finally {
+      preparePaymentLockRef.current = false;
       setIsPreparingPayment(false);
     }
   };
@@ -210,6 +316,10 @@ export default function PaymentPage() {
         throw new Error("Payment failed");
       }
 
+      if (latestOrder.status === "EXPIRED") {
+        throw new Error("Payment window expired");
+      }
+
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
     }
 
@@ -230,11 +340,20 @@ export default function PaymentPage() {
   const handlePaymentSuccess = async (paymentIntentId: string) => {
     try {
       setIsWaitingForWebhook(true);
-      await StripeService.confirmIntent(
+      const result = await StripeService.confirmIntent(
         orderId,
         reservationToken,
         paymentIntentId,
       );
+
+      if (result.status === "SUCCEEDED_REQUIRES_REVIEW") {
+        handleManualReviewRequired();
+        return;
+      }
+
+      if (result.status === "FAILED") {
+        throw new Error("Payment failed");
+      }
 
       const paidOrder = await waitForPaidOrder();
 
@@ -244,9 +363,17 @@ export default function PaymentPage() {
     } catch (error) {
       setPaymentIntent(null);
       setIsPaymentModalOpen(false);
+
+      if (error instanceof ApiError) {
+        router.replace("/cart");
+        return;
+      }
+
       const message =
         error instanceof Error && error.message === "Payment failed"
           ? "Payment failed. Please try again."
+          : error instanceof Error && error.message === "Payment window expired"
+            ? "Payment window expired. Please review your cart."
           : "Payment succeeded, but webhook confirmation is still pending.";
 
       toast.error(message);
@@ -336,10 +463,16 @@ export default function PaymentPage() {
                   </div>
                 )}
 
-                {order.status === "RESERVED" && order.expiresAt && (
+                {manualReviewMessage && (
                   <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4 text-sm leading-6 text-base-content/75">
-                    Your reservation is still being held. Complete payment
-                    before the timer runs out to keep the order active.
+                    {manualReviewMessage}
+                  </div>
+                )}
+
+                {isPayableStatus(order.status) && order.expiresAt && (
+                  <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4 text-sm leading-6 text-base-content/75">
+                    Complete payment before the timer runs out to keep this
+                    order active.
                   </div>
                 )}
 
@@ -470,10 +603,10 @@ export default function PaymentPage() {
                   </div>
                 </div>
 
-                {order.status === "RESERVED" && order.expiresAt && (
+                {isPayableStatus(order.status) && order.expiresAt && (
                   <div className="rounded-2xl border border-warning/20 bg-warning/10 p-4 text-center">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/55">
-                      Reservation Hold
+                      Payment Window
                     </p>
                     <p className="mt-2 text-2xl font-bold text-base-content">
                       {formatCountdown(expiresIn)}
@@ -539,6 +672,7 @@ export default function PaymentPage() {
               clientSecret={paymentIntent.clientSecret}
               amount={paymentIntent.amount}
               currency={paymentIntent.currency}
+              onBeforePay={handleBeforePaymentStart}
               onSuccess={handlePaymentSuccess}
               onError={handlePaymentError}
             />

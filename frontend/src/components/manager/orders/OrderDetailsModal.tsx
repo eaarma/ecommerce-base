@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   ExternalLink,
   MoreHorizontal,
@@ -14,6 +14,7 @@ import Modal from "@/components/common/Modal";
 import OrderRefundModal, {
   type RefundAction,
 } from "@/components/manager/orders/OrderRefundModal";
+import { ApiError } from "@/lib/api/axios";
 import { OrderService } from "@/lib/orderService";
 import type {
   DeliveryCarrier,
@@ -25,7 +26,6 @@ import type {
 import type { RefundResponseDto } from "@/types/payment";
 import {
   DELIVERY_CARRIER_LABELS,
-  DELIVERY_STATUS_LABELS,
   formatDeliveryCarrier,
   formatDeliveryMethod,
   formatDeliveryStatus,
@@ -51,9 +51,12 @@ type DeliveryFormState = {
   trackingUrl: string;
 };
 
-const DELIVERY_STATUS_OPTIONS = Object.keys(
-  DELIVERY_STATUS_LABELS,
-) as DeliveryStatus[];
+const MANAGER_DELIVERY_STATUS_OPTIONS: DeliveryStatus[] = [
+  "READY_TO_SHIP",
+  "SHIPPED",
+  "SENT_BACK",
+  "CANCELLED",
+];
 
 const formatMoney = (amount: number, currency: string) =>
   new Intl.NumberFormat("en-US", {
@@ -101,6 +104,8 @@ const getDeliveryStatusBadgeClass = (status: DeliveryStatus) => {
       return "badge-info";
     case "SHIPPED":
       return "badge-primary";
+    case "SENT_BACK":
+      return "badge-warning";
     case "CANCELLED":
       return "badge-error";
     default:
@@ -115,6 +120,64 @@ const buildDeliveryFormState = (order: OrderResponse): DeliveryFormState => ({
   trackingUrl: order.delivery.trackingUrl ?? "",
 });
 
+const ITEM_REFUNDABLE_STATUSES: OrderItem["status"][] = [
+  "ORDERED",
+  "PARTIALLY_REFUNDED",
+];
+
+const FULL_ORDER_REFUNDABLE_ITEM_STATUSES: OrderItem["status"][] = [
+  "ORDERED",
+  "PARTIALLY_REFUNDED",
+  "REFUNDED",
+];
+
+const isFulfillmentPaidOrder = (status: OrderStatus) =>
+  status === "PAID" || status === "PARTIALLY_REFUNDED";
+
+const isDeliveryCancellationOrder = (status: OrderStatus) =>
+  status === "CANCELLED" ||
+  status === "EXPIRED" ||
+  status === "REFUNDED" ||
+  status === "CANCELLED_REFUNDED";
+
+const isClosedPaidDeliveryOrder = (status: OrderStatus) =>
+  status === "CANCELLED" ||
+  status === "REFUNDED" ||
+  status === "CANCELLED_REFUNDED";
+
+const getAllowedDeliveryStatuses = (
+  orderStatus: OrderStatus,
+  deliveryStatus: DeliveryStatus,
+): DeliveryStatus[] => {
+  const options: DeliveryStatus[] = [];
+
+  if (isFulfillmentPaidOrder(orderStatus) || isClosedPaidDeliveryOrder(orderStatus)) {
+    options.push(
+      ...MANAGER_DELIVERY_STATUS_OPTIONS.filter(
+        (status) => status !== "CANCELLED",
+      ),
+    );
+  }
+
+  if (isDeliveryCancellationOrder(orderStatus)) {
+    options.push("CANCELLED");
+  }
+
+  if (options.length === 0) {
+    return [deliveryStatus];
+  }
+
+  const uniqueOptions = Array.from(new Set(options));
+
+  if (!uniqueOptions.includes(deliveryStatus)) {
+    return [deliveryStatus, ...uniqueOptions];
+  }
+
+  return uniqueOptions.filter((status) =>
+    MANAGER_DELIVERY_STATUS_OPTIONS.includes(status),
+  );
+};
+
 export default function OrderDetailsModal({
   order,
   onClose,
@@ -125,6 +188,7 @@ export default function OrderDetailsModal({
   const [refundAction, setRefundAction] = useState<RefundAction | null>(null);
   const [refundReason, setRefundReason] = useState("");
   const [refundQuantity, setRefundQuantity] = useState(1);
+  const [refundEnabled, setRefundEnabled] = useState(true);
   const [submittingRefund, setSubmittingRefund] = useState(false);
   const [refundError, setRefundError] = useState<string | null>(null);
   const [isOrderOptionsOpen, setIsOrderOptionsOpen] = useState(false);
@@ -135,6 +199,7 @@ export default function OrderDetailsModal({
   );
   const [isUpdatingDelivery, setIsUpdatingDelivery] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const refundSubmitLockRef = useRef(false);
 
   useEffect(() => {
     if (!order) {
@@ -187,18 +252,36 @@ export default function OrderDetailsModal({
   const canRefundOrder =
     currentOrder.status === "PAID" ||
     currentOrder.status === "PARTIALLY_REFUNDED";
+  const canFullyRefundOrderItems = currentOrder.items.every((item) =>
+    FULL_ORDER_REFUNDABLE_ITEM_STATUSES.includes(item.status),
+  );
+  const allowedDeliveryStatuses = getAllowedDeliveryStatuses(
+    currentOrder.status,
+    currentOrder.delivery.status,
+  );
+  const trackingLocked = deliveryForm.status === "CANCELLED";
   const remainingRefundAmount = Math.max(
     Number(currentOrder.total) - refundedAmount,
     0,
   );
   const deliveryLines = getDeliveryDestinationLines(currentOrder.delivery);
 
-  const openItemRefund = (item: OrderItem) => {
+  const openItemRefund = (
+    item: OrderItem,
+    allowRefundToggle: boolean,
+    defaultRefundEnabled = true,
+  ) => {
     const refundedQuantity = refundedQuantityByItem[item.id] ?? 0;
     const maxQuantity = Math.max(item.quantity - refundedQuantity, 0);
 
-    setRefundAction({ type: "item", item, maxQuantity });
+    setRefundAction({
+      type: "item",
+      item,
+      maxQuantity,
+      allowRefundToggle,
+    });
     setRefundQuantity(1);
+    setRefundEnabled(defaultRefundEnabled);
     setRefundReason("");
     setRefundError(null);
     setItemOptionsMenu(null);
@@ -207,6 +290,7 @@ export default function OrderDetailsModal({
   const openFullRefund = () => {
     setRefundAction({ type: "full" });
     setRefundQuantity(1);
+    setRefundEnabled(true);
     setRefundReason("");
     setRefundError(null);
     setIsOrderOptionsOpen(false);
@@ -216,11 +300,16 @@ export default function OrderDetailsModal({
     setRefundAction(null);
     setRefundReason("");
     setRefundQuantity(1);
+    setRefundEnabled(true);
     setRefundError(null);
   };
 
   const getRefundAmountPreview = () => {
     if (!refundAction) {
+      return 0;
+    }
+
+    if (refundAction.type === "item" && !refundEnabled) {
       return 0;
     }
 
@@ -255,7 +344,7 @@ export default function OrderDetailsModal({
   };
 
   const submitRefund = async () => {
-    if (!refundAction) return;
+    if (!refundAction || refundSubmitLockRef.current) return;
 
     const reason = refundReason.trim();
 
@@ -266,24 +355,31 @@ export default function OrderDetailsModal({
 
     if (
       refundAction.type === "item" &&
+      refundEnabled &&
       (refundQuantity < 1 || refundQuantity > refundAction.maxQuantity)
     ) {
       setRefundError("Choose a valid refund quantity.");
       return;
     }
 
+    refundSubmitLockRef.current = true;
     setSubmittingRefund(true);
     setRefundError(null);
 
     try {
       if (refundAction.type === "full") {
         await OrderService.refundManagerOrder(currentOrder.id, reason);
-      } else {
+      } else if (refundEnabled) {
         await OrderService.refundManagerOrderItem(
           currentOrder.id,
           refundAction.item.id,
           refundQuantity,
           reason,
+        );
+      } else {
+        await OrderService.cancelManagerOrderItemWithoutRefund(
+          currentOrder.id,
+          refundAction.item.id,
         );
       }
 
@@ -299,9 +395,12 @@ export default function OrderDetailsModal({
       await onRefunded();
     } catch {
       setRefundError(
-        "Refund could not be created. Check Stripe and try again.",
+        refundAction.type === "item" && !refundEnabled
+          ? "Item could not be cancelled. Please try again."
+          : "Refund could not be created. Check Stripe and try again.",
       );
     } finally {
+      refundSubmitLockRef.current = false;
       setSubmittingRefund(false);
     }
   };
@@ -320,21 +419,33 @@ export default function OrderDetailsModal({
     setDeliveryError(null);
 
     try {
+      const deliveryPayload =
+        deliveryForm.status === "CANCELLED"
+          ? {
+              status: deliveryForm.status,
+              carrier: deliveryForm.carrier,
+            }
+          : {
+              status: deliveryForm.status,
+              carrier: deliveryForm.carrier,
+              trackingNumber: deliveryForm.trackingNumber,
+              trackingUrl: deliveryForm.trackingUrl,
+            };
+
       const updatedOrder = await OrderService.updateManagerDelivery(
         currentOrder.id,
-        {
-          status: deliveryForm.status,
-          carrier: deliveryForm.carrier,
-          trackingNumber: deliveryForm.trackingNumber,
-          trackingUrl: deliveryForm.trackingUrl,
-        },
+        deliveryPayload,
       );
 
       setCurrentOrder(updatedOrder);
       setDeliveryForm(buildDeliveryFormState(updatedOrder));
       await onRefunded();
-    } catch {
-      setDeliveryError("Delivery update failed. Please try again.");
+    } catch (error) {
+      setDeliveryError(
+        error instanceof ApiError
+          ? error.message
+          : "Delivery update failed. Please try again.",
+      );
     } finally {
       setIsUpdatingDelivery(false);
     }
@@ -356,17 +467,27 @@ export default function OrderDetailsModal({
             item.quantity - refundedQuantity,
             0,
           );
+          const canRefundItem =
+            canRefundOrder &&
+            refundableQuantity > 0 &&
+            ITEM_REFUNDABLE_STATUSES.includes(item.status);
+          const canCancelWithoutRefund =
+            currentOrder.status === "PAID" && item.status === "ORDERED";
+          const canOpenCancellationFlow =
+            canRefundItem || canCancelWithoutRefund;
 
           return (
             <button
               key={item.id}
               type="button"
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-base-content hover:bg-base-200 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canRefundOrder || refundableQuantity === 0}
-              onClick={() => openItemRefund(item)}
+              disabled={!canOpenCancellationFlow}
+              onClick={() =>
+                openItemRefund(item, canCancelWithoutRefund, canRefundItem)
+              }
             >
               <RotateCcw size={15} aria-hidden="true" />
-              Cancel/refund item
+              Cancel item
             </button>
           );
         })}
@@ -527,7 +648,7 @@ export default function OrderDetailsModal({
                     )
                   }
                 >
-                  {DELIVERY_STATUS_OPTIONS.map((status) => (
+                  {allowedDeliveryStatuses.map((status) => (
                     <option key={status} value={status}>
                       {formatDeliveryStatus(status)}
                     </option>
@@ -565,6 +686,7 @@ export default function OrderDetailsModal({
                   type="text"
                   className="input input-bordered mt-1 w-full"
                   value={deliveryForm.trackingNumber}
+                  disabled={trackingLocked}
                   onChange={(event) =>
                     updateDeliveryField("trackingNumber", event.target.value)
                   }
@@ -578,6 +700,7 @@ export default function OrderDetailsModal({
                   type="url"
                   className="input input-bordered mt-1 w-full"
                   value={deliveryForm.trackingUrl}
+                  disabled={trackingLocked}
                   onChange={(event) =>
                     updateDeliveryField("trackingUrl", event.target.value)
                   }
@@ -600,7 +723,7 @@ export default function OrderDetailsModal({
                 {isUpdatingDelivery ? "Saving..." : "Save delivery update"}
               </button>
               <p className="text-sm text-base-content/60">
-                Use status changes here to mark the order shipped or delivered.
+                Use status changes here to mark the order ready to ship, shipped, sent back, or cancelled.
               </p>
             </div>
           </section>
@@ -784,7 +907,11 @@ export default function OrderDetailsModal({
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-error hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canRefundOrder || remainingRefundAmount <= 0}
+                    disabled={
+                      !canRefundOrder ||
+                      remainingRefundAmount <= 0 ||
+                      !canFullyRefundOrderItems
+                    }
                     onClick={openFullRefund}
                   >
                     <RotateCcw size={15} aria-hidden="true" />
@@ -811,12 +938,14 @@ export default function OrderDetailsModal({
         refundAmount={getRefundAmountPreview()}
         refundQuantity={refundQuantity}
         refundReason={refundReason}
+        refundEnabled={refundEnabled}
         refundError={refundError}
         submitting={submittingRefund}
         onClose={closeRefundDialog}
         onSubmit={submitRefund}
         onQuantityChange={setRefundQuantity}
         onReasonChange={setRefundReason}
+        onRefundToggleChange={setRefundEnabled}
       />
     </>
   );

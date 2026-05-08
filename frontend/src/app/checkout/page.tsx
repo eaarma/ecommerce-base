@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 
+import { useCartAvailabilitySync } from "@/hooks/useCartAvailabilitySync";
+import { ApiError } from "@/lib/api/axios";
 import PhoneInput from "@/components/common/PhoneInput";
 import { OrderService } from "@/lib/orderService";
+import { isPurchasableCartItem } from "@/store/cartSlice";
 import type { RootState } from "@/store/store";
 import type {
   DeliveryCarrier,
@@ -65,8 +68,11 @@ const splitFullName = (value: string) => {
 export default function CheckoutPage() {
   const router = useRouter();
   const selectedItems = useSelector((state: RootState) =>
-    state.cart.items.filter((item) => item.selected !== false),
+    state.cart.items.filter(
+      (item) => item.selected !== false && isPurchasableCartItem(item),
+    ),
   );
+  const { isSyncing: isSyncingCart } = useCartAvailabilitySync();
   const [form, setForm] = useState<CheckoutForm>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isParcelLocker = form.deliveryMethod === "PARCEL_LOCKER";
@@ -84,6 +90,11 @@ export default function CheckoutPage() {
 
     if (selectedItems.length === 0) {
       toast.error("Cart is empty");
+      return;
+    }
+
+    if (isSyncingCart) {
+      toast.error("Please wait while we refresh your cart.");
       return;
     }
 
@@ -160,6 +171,7 @@ export default function CheckoutPage() {
         productId: item.productId,
         variantId: item.variantId,
         quantity: item.quantity,
+        expectedUnitPrice: item.price,
       })),
     };
 
@@ -172,7 +184,15 @@ export default function CheckoutPage() {
           order.reservationToken,
         )}`,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          router.replace("/cart");
+        }
+
+        return;
+      }
+
       toast.error("Failed to reserve order");
     } finally {
       setIsSubmitting(false);
@@ -473,9 +493,13 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 className="btn btn-primary h-12 w-full text-base"
-                disabled={isSubmitting || selectedItems.length === 0}
+                disabled={isSubmitting || isSyncingCart || selectedItems.length === 0}
               >
-                {isSubmitting ? "Reserving..." : "Payment"}
+                {isSyncingCart
+                  ? "Checking cart..."
+                  : isSubmitting
+                    ? "Reserving..."
+                    : "Payment"}
               </button>
             </form>
           </div>

@@ -13,6 +13,7 @@ export type OrderItemStatus =
   | "RESERVED"
   | "ORDERED"
   | "CANCELLED"
+  | "CANCELLED_NO_REFUND"
   | "EXPIRED"
   | "REFUNDED"
   | "PARTIALLY_REFUNDED"
@@ -26,6 +27,7 @@ export type DeliveryStatus =
   | "NOT_READY"
   | "READY_TO_SHIP"
   | "SHIPPED"
+  | "SENT_BACK"
   | "DELIVERED"
   | "CANCELLED";
 
@@ -106,6 +108,7 @@ export interface ReserveOrderItemRequest {
   productId: number;
   variantId: number;
   quantity: number;
+  expectedUnitPrice?: number;
 }
 
 export interface ReserveOrderRequest {

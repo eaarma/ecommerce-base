@@ -32,8 +32,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class OrderService {
 
+    private static final long RESERVATION_HOLD_MINUTES = 15;
+    private static final long PAYMENT_PROCESSING_GRACE_MINUTES = 5;
+    private static final long FINALIZED_HOLD_MINUTES = RESERVATION_HOLD_MINUTES + PAYMENT_PROCESSING_GRACE_MINUTES;
     private static final String DEFAULT_CURRENCY = "EUR";
     private static final BigDecimal DEFAULT_SHIPPING_TOTAL = BigDecimal.ZERO;
+    private static final String STALE_CART_MESSAGE = "Some items are no longer available. Please review your cart.";
+    private static final String RESERVATION_EXPIRED_MESSAGE = "Order reservation has expired.";
 
     private final OrderRepository orderRepository;
     private final ProductVariantRepository productVariantRepository;
@@ -42,12 +47,12 @@ public class OrderService {
 
     @Transactional
     public Order reserveOrder(ReserveOrderRequest request) {
-        Map<Long, ProductVariant> variantsById = loadVariantsById(request);
         Delivery delivery = buildDelivery(request.delivery());
+        Map<Long, ProductVariant> variantsById = loadVariantsById(request);
 
         Order order = Order.builder()
                 .reservationToken(UUID.randomUUID())
-                .expiresAt(Instant.now().plus(15, ChronoUnit.MINUTES))
+                .expiresAt(Instant.now().plus(RESERVATION_HOLD_MINUTES, ChronoUnit.MINUTES))
                 .status(OrderStatus.RESERVED)
                 .customerEmail(requireValue(request.customerEmail(), "Customer email"))
                 .customerFirstName(requireValue(request.customerFirstName(), "Customer first name"))
@@ -65,7 +70,12 @@ public class OrderService {
             ProductVariant variant = variantsById.get(itemRequest.variantId());
             Product product = variant.getProduct();
 
-            validateProductAvailable(product, variant, itemRequest.productId(), itemRequest.quantity());
+            validateProductAvailable(
+                    product,
+                    variant,
+                    itemRequest.productId(),
+                    itemRequest.quantity(),
+                    itemRequest.expectedUnitPrice());
             reserveStock(product, variant, itemRequest.quantity());
 
             BigDecimal lineTotal = variant.getPrice()
@@ -108,9 +118,15 @@ public class OrderService {
     @Transactional(dontRollbackOn = IllegalStateException.class)
     public Order prepareOrderForPayment(Long orderId, String reservationToken) {
         Order order = getOrderOrThrow(orderId, parseReservationToken(reservationToken));
+        expireUnpaidOrderIfNeeded(order);
+
+        if (order.getStatus() == OrderStatus.EXPIRED) {
+            throw new IllegalStateException(RESERVATION_EXPIRED_MESSAGE);
+        }
 
         if (order.getStatus() == OrderStatus.PAYMENT_FAILED) {
             order.setStatus(OrderStatus.FINALIZED);
+            order.setExpiresAt(resolveReservationExpiration(order));
             return orderRepository.save(order);
         }
 
@@ -120,25 +136,73 @@ public class OrderService {
     @Transactional(dontRollbackOn = IllegalStateException.class)
     public Order finalizeOrder(Long orderId, UUID token) {
         Order order = getOrderOrThrow(orderId, token);
+        expireUnpaidOrderIfNeeded(order);
 
         if (order.getStatus() == OrderStatus.FINALIZED) {
+            Instant reservationExpiration = resolveReservationExpiration(order);
+
+            if (order.getExpiresAt() == null || order.getExpiresAt().isBefore(reservationExpiration)) {
+                order.setExpiresAt(reservationExpiration);
+                return orderRepository.save(order);
+            }
+
             return order;
+        }
+
+        if (order.getStatus() == OrderStatus.EXPIRED) {
+            throw new IllegalStateException(RESERVATION_EXPIRED_MESSAGE);
         }
 
         if (order.getStatus() != OrderStatus.RESERVED) {
             throw new IllegalStateException("Only reserved or finalized orders can be used for payment.");
         }
 
-        if (order.getExpiresAt() != null && order.getExpiresAt().isBefore(Instant.now())) {
+        order.setStatus(OrderStatus.FINALIZED);
+        order.setFinalizedAt(Instant.now());
+        order.setExpiresAt(resolveReservationExpiration(order));
+
+        return orderRepository.save(order);
+    }
+
+    @Transactional(dontRollbackOn = IllegalStateException.class)
+    public Order beginPaymentSubmission(Long orderId, String reservationToken) {
+        return beginPaymentSubmission(orderId, parseReservationToken(reservationToken));
+    }
+
+    @Transactional(dontRollbackOn = IllegalStateException.class)
+    public Order beginPaymentSubmission(Long orderId, UUID token) {
+        Order order = getOrderOrThrow(orderId, token);
+        expireUnpaidOrderIfNeeded(order);
+
+        if (order.getStatus() == OrderStatus.EXPIRED) {
+            throw new IllegalStateException(RESERVATION_EXPIRED_MESSAGE);
+        }
+
+        if (!isPaymentStartWindowOpen(order)) {
             expireReservation(order);
-            throw new IllegalStateException("Order reservation has expired.");
+            throw new IllegalStateException(RESERVATION_EXPIRED_MESSAGE);
+        }
+
+        if (order.getStatus() != OrderStatus.RESERVED
+                && order.getStatus() != OrderStatus.FINALIZED
+                && order.getStatus() != OrderStatus.PAYMENT_FAILED) {
+            throw new IllegalStateException("Only unpaid orders can start a payment attempt.");
         }
 
         order.setStatus(OrderStatus.FINALIZED);
-        order.setFinalizedAt(Instant.now());
-        order.getItems().forEach(item -> item.setStatus(OrderItemStatus.ORDERED));
 
-        return orderRepository.save(order);
+        if (order.getFinalizedAt() == null) {
+            order.setFinalizedAt(Instant.now());
+        }
+
+        Instant finalizedExpiration = resolveFinalizedExpiration(order);
+
+        if (!finalizedExpiration.equals(order.getExpiresAt())) {
+            order.setExpiresAt(finalizedExpiration);
+            return orderRepository.save(order);
+        }
+
+        return order;
     }
 
     @Transactional
@@ -157,9 +221,11 @@ public class OrderService {
     @Transactional
     public void markPaymentFailed(Long orderId) {
         Order order = getOrderByIdOrThrow(orderId);
+        expireUnpaidOrderIfNeeded(order);
 
         if (order.getStatus() == OrderStatus.PAID
-                || order.getStatus() == OrderStatus.PAYMENT_FAILED) {
+                || order.getStatus() == OrderStatus.PAYMENT_FAILED
+                || order.getStatus() == OrderStatus.EXPIRED) {
             return;
         }
 
@@ -167,13 +233,22 @@ public class OrderService {
             throw new IllegalStateException("Only finalized orders can be marked as payment failed.");
         }
 
+        if (!isPaymentStartWindowOpen(order)) {
+            expireReservation(order);
+            orderRepository.save(order);
+            return;
+        }
+
         order.setStatus(OrderStatus.PAYMENT_FAILED);
+        order.setExpiresAt(resolveReservationExpiration(order));
         orderRepository.save(order);
     }
 
     @Transactional
     public Order getOrderByToken(Long orderId, UUID token) {
-        return getOrderOrThrow(orderId, token);
+        Order order = getOrderOrThrow(orderId, token);
+        expireUnpaidOrderIfNeeded(order);
+        return order;
     }
 
     private Order getOrderOrThrow(Long orderId, UUID token) {
@@ -206,6 +281,12 @@ public class OrderService {
 
         order.setStatus(OrderStatus.PAID);
         order.setPaidAt(Instant.now());
+        order.setExpiresAt(null);
+        order.getItems().forEach(item -> {
+            if (item.getStatus() == OrderItemStatus.RESERVED) {
+                item.setStatus(OrderItemStatus.ORDERED);
+            }
+        });
 
         if (order.getDelivery() != null && order.getDelivery().getStatus() == DeliveryStatus.NOT_READY) {
             order.getDelivery().setStatus(DeliveryStatus.READY_TO_SHIP);
@@ -225,7 +306,7 @@ public class OrderService {
         var variants = productVariantRepository.findAllByIdIn(variantIds);
 
         if (variants.size() != variantIds.size()) {
-            throw new IllegalArgumentException("One or more product variants were not found.");
+            throw new IllegalStateException(STALE_CART_MESSAGE);
         }
 
         return variants.stream()
@@ -236,21 +317,30 @@ public class OrderService {
             Product product,
             ProductVariant variant,
             Long requestedProductId,
-            int requestedQuantity) {
+            int requestedQuantity,
+            BigDecimal expectedUnitPrice) {
         if (!product.getId().equals(requestedProductId)) {
-            throw new IllegalArgumentException("Variant does not belong to the requested product.");
+            throw new IllegalStateException(STALE_CART_MESSAGE);
         }
 
-        if (product.getStatus() == ProductStatus.ARCHIVED || product.getStatus() == ProductStatus.DRAFT) {
-            throw new IllegalStateException("Product is not available.");
+        if (requestedQuantity <= 0) {
+            throw new IllegalArgumentException("Requested quantity must be greater than zero.");
+        }
+
+        if (product.getStatus() != ProductStatus.ACTIVE) {
+            throw new IllegalStateException(STALE_CART_MESSAGE);
         }
 
         if (variant.getStatus() != ProductStatus.ACTIVE) {
-            throw new IllegalStateException("Selected product variant is not available.");
+            throw new IllegalStateException(STALE_CART_MESSAGE);
         }
 
-        if (variant.getStockQuantity() < requestedQuantity) {
-            throw new IllegalStateException("Not enough stock available.");
+        if (expectedUnitPrice != null && variant.getPrice().compareTo(expectedUnitPrice) != 0) {
+            throw new IllegalStateException(STALE_CART_MESSAGE);
+        }
+
+        if (variant.getStockQuantity() == null || variant.getStockQuantity() < requestedQuantity) {
+            throw new IllegalStateException(STALE_CART_MESSAGE);
         }
     }
 
@@ -280,6 +370,7 @@ public class OrderService {
     @Transactional
     public Order cancelReservation(Long orderId, UUID token) {
         Order order = getOrderOrThrow(orderId, token);
+        expireUnpaidOrderIfNeeded(order);
 
         if (order.getStatus() != OrderStatus.RESERVED) {
             throw new IllegalStateException("Only reserved orders can be cancelled.");
@@ -293,6 +384,98 @@ public class OrderService {
         }
 
         return orderRepository.save(order);
+    }
+
+    @Transactional
+    public Order cancelPaidItemWithoutRefund(Long orderId, Long orderItemId) {
+        Order order = orderRepository.findWithItemsById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found."));
+
+        if (order.getStatus() != OrderStatus.PAID) {
+            throw new IllegalStateException("Only paid orders can cancel items without refund.");
+        }
+
+        OrderItem item = order.getItems()
+                .stream()
+                .filter(orderItem -> orderItem.getId().equals(orderItemId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Order item not found."));
+
+        if (item.getStatus() != OrderItemStatus.ORDERED) {
+            throw new IllegalStateException("Only ordered items can be cancelled without refund.");
+        }
+
+        item.setStatus(OrderItemStatus.CANCELLED_NO_REFUND);
+        updatePaidOrderStatusAfterItemCancellation(order);
+        return orderRepository.save(order);
+    }
+
+    private void updatePaidOrderStatusAfterItemCancellation(Order order) {
+        boolean allCancelledWithoutRefund = order.getItems()
+                .stream()
+                .allMatch(item -> item.getStatus() == OrderItemStatus.CANCELLED_NO_REFUND);
+
+        if (allCancelledWithoutRefund) {
+            order.setStatus(OrderStatus.CANCELLED);
+            cancelDeliveryIfUnshipped(order);
+            return;
+        }
+
+        order.setStatus(OrderStatus.PAID);
+    }
+
+    private void cancelDeliveryIfUnshipped(Order order) {
+        if (order.getDelivery() == null) {
+            return;
+        }
+
+        if (order.getDelivery().getStatus() == DeliveryStatus.SHIPPED
+                || order.getDelivery().getStatus() == DeliveryStatus.SENT_BACK
+                || order.getDelivery().getStatus() == DeliveryStatus.DELIVERED) {
+            return;
+        }
+
+        order.getDelivery().setStatus(DeliveryStatus.CANCELLED);
+        order.getDelivery().setTrackingNumber(null);
+        order.getDelivery().setTrackingUrl(null);
+        order.getDelivery().setShippedAt(null);
+        order.getDelivery().setDeliveredAt(null);
+    }
+
+    private void expireUnpaidOrderIfNeeded(Order order) {
+        if (!isExpirableUnpaidStatus(order.getStatus()) || order.getExpiresAt() == null) {
+            return;
+        }
+
+        if (!order.getExpiresAt().isAfter(Instant.now())) {
+            expireReservation(order);
+        }
+    }
+
+    private boolean isExpirableUnpaidStatus(OrderStatus status) {
+        return status == OrderStatus.RESERVED
+                || status == OrderStatus.FINALIZED
+                || status == OrderStatus.PAYMENT_FAILED;
+    }
+
+    private Instant resolveFinalizedExpiration(Order order) {
+        Instant baseTime = order.getCreatedAt() != null
+                ? order.getCreatedAt()
+                : Instant.now();
+
+        return baseTime.plus(FINALIZED_HOLD_MINUTES, ChronoUnit.MINUTES);
+    }
+
+    private Instant resolveReservationExpiration(Order order) {
+        Instant baseTime = order.getCreatedAt() != null
+                ? order.getCreatedAt()
+                : Instant.now();
+
+        return baseTime.plus(RESERVATION_HOLD_MINUTES, ChronoUnit.MINUTES);
+    }
+
+    private boolean isPaymentStartWindowOpen(Order order) {
+        return resolveReservationExpiration(order).isAfter(Instant.now());
     }
 
     private void restockReservedItems(Order order, OrderItemStatus itemStatus) {

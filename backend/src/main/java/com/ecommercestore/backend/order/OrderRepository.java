@@ -28,7 +28,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("""
             select o
             from Order o
-            where o.status = com.ecommercestore.backend.order.OrderStatus.RESERVED
+            where o.status in (
+                com.ecommercestore.backend.order.OrderStatus.RESERVED,
+                com.ecommercestore.backend.order.OrderStatus.FINALIZED,
+                com.ecommercestore.backend.order.OrderStatus.PAYMENT_FAILED
+            )
               and o.expiresAt is not null
               and o.expiresAt <= :now
             """)

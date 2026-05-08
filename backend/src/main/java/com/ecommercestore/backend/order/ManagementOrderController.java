@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -50,5 +51,12 @@ public class ManagementOrderController {
             @PathVariable("orderId") Long orderId,
             @RequestBody UpdateDeliveryRequest request) {
         return orderMapper.toResponse(deliveryService.updateManagerDelivery(orderId, request));
+    }
+
+    @PostMapping("/{orderId}/items/{orderItemId}/cancel-without-refund")
+    public OrderResponse cancelItemWithoutRefund(
+            @PathVariable("orderId") Long orderId,
+            @PathVariable("orderItemId") Long orderItemId) {
+        return orderMapper.toResponse(orderService.cancelPaidItemWithoutRefund(orderId, orderItemId));
     }
 }

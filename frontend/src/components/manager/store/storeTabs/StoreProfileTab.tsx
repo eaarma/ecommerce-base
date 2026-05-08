@@ -12,6 +12,7 @@ import {
 import toast from "react-hot-toast";
 
 import { ApiError } from "@/lib/api/axios";
+import ConfirmActionModal from "@/components/common/ConfirmActionModal";
 import { StoreFormCard as FormCard } from "@/components/manager/store/storePageEditor/StoreFormCard";
 import { StorePageEditorTextField as TextField } from "@/components/manager/store/storePageEditor/StorePageEditorTextField";
 import {
@@ -157,6 +158,11 @@ export default function StoreProfileTab({
   const [submitting, setSubmitting] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [faviconUploading, setFaviconUploading] = useState(false);
+  const [isLogoRemovalConfirmOpen, setIsLogoRemovalConfirmOpen] = useState(false);
+  const [isFaviconRemovalConfirmOpen, setIsFaviconRemovalConfirmOpen] =
+    useState(false);
+  const [isRemovingLogo, setIsRemovingLogo] = useState(false);
+  const [isRemovingFavicon, setIsRemovingFavicon] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingLogoStoragePath, setPendingLogoStoragePath] = useState<
     string | null
@@ -494,14 +500,36 @@ export default function StoreProfileTab({
     }
   };
 
-  const handleRemoveLogo = () => {
-    void clearPendingLogoUpload();
-    updateField("logoUrl", "");
+  const handleRemoveLogo = async () => {
+    if (isRemovingLogo) {
+      return;
+    }
+
+    setIsRemovingLogo(true);
+
+    try {
+      await clearPendingLogoUpload();
+      updateField("logoUrl", "");
+      setIsLogoRemovalConfirmOpen(false);
+    } finally {
+      setIsRemovingLogo(false);
+    }
   };
 
-  const handleRemoveFavicon = () => {
-    void clearPendingFaviconUpload();
-    updateField("faviconUrl", "");
+  const handleRemoveFavicon = async () => {
+    if (isRemovingFavicon) {
+      return;
+    }
+
+    setIsRemovingFavicon(true);
+
+    try {
+      await clearPendingFaviconUpload();
+      updateField("faviconUrl", "");
+      setIsFaviconRemovalConfirmOpen(false);
+    } finally {
+      setIsRemovingFavicon(false);
+    }
   };
 
   const handleReset = () => {
@@ -674,6 +702,7 @@ export default function StoreProfileTab({
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-base-300 bg-base-100">
                         {form.logoUrl.trim() ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
                           <img
                             src={form.logoUrl.trim()}
                             alt={`${form.storeName.trim() || "Store"} logo`}
@@ -701,8 +730,10 @@ export default function StoreProfileTab({
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
-                              onClick={handleRemoveLogo}
-                              disabled={isAssetUploading || submitting}
+                              onClick={() => setIsLogoRemovalConfirmOpen(true)}
+                              disabled={
+                                isAssetUploading || submitting || isRemovingLogo
+                              }
                             >
                               Remove logo
                             </button>
@@ -737,6 +768,7 @@ export default function StoreProfileTab({
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-base-300 bg-base-100">
                         {form.faviconUrl.trim() ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
                           <img
                             src={form.faviconUrl.trim()}
                             alt="Store favicon"
@@ -766,8 +798,12 @@ export default function StoreProfileTab({
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
-                              onClick={handleRemoveFavicon}
-                              disabled={isAssetUploading || submitting}
+                              onClick={() => setIsFaviconRemovalConfirmOpen(true)}
+                              disabled={
+                                isAssetUploading ||
+                                submitting ||
+                                isRemovingFavicon
+                              }
                             >
                               Remove favicon
                             </button>
@@ -1060,6 +1096,31 @@ export default function StoreProfileTab({
           </aside>
         </div>
       )}
+      <ConfirmActionModal
+        isOpen={isLogoRemovalConfirmOpen}
+        title="Remove logo?"
+        description="This removes the current logo from the profile draft. Save the profile to persist the change."
+        confirmLabel="Remove logo"
+        cancelLabel="Keep logo"
+        tone="error"
+        isSubmitting={isRemovingLogo}
+        onClose={() => !isRemovingLogo && setIsLogoRemovalConfirmOpen(false)}
+        onConfirm={() => void handleRemoveLogo()}
+      />
+
+      <ConfirmActionModal
+        isOpen={isFaviconRemovalConfirmOpen}
+        title="Remove favicon?"
+        description="This removes the current favicon from the profile draft. Save the profile to persist the change."
+        confirmLabel="Remove favicon"
+        cancelLabel="Keep favicon"
+        tone="error"
+        isSubmitting={isRemovingFavicon}
+        onClose={() =>
+          !isRemovingFavicon && setIsFaviconRemovalConfirmOpen(false)
+        }
+        onConfirm={() => void handleRemoveFavicon()}
+      />
     </section>
   );
 }

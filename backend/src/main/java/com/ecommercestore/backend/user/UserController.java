@@ -1,6 +1,7 @@
 package com.ecommercestore.backend.user;
 
 import com.ecommercestore.backend.user.dto.CreateUserRequest;
+import com.ecommercestore.backend.user.dto.UpdateUserRequest;
 import com.ecommercestore.backend.user.dto.UserResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,5 +32,12 @@ public class UserController {
     @GetMapping("/{id}")
     public UserResponse getUserById(@PathVariable("id") UUID id) {
         return userService.getUserById(id);
+    }
+
+    @PatchMapping("/{id}")
+    public UserResponse updateUser(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody UpdateUserRequest request) {
+        return userService.updateUser(id, request);
     }
 }

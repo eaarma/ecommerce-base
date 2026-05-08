@@ -3,6 +3,7 @@ export type PaymentProvider = "STRIPE";
 export type PaymentStatus =
   | "PENDING"
   | "SUCCEEDED"
+  | "SUCCEEDED_REQUIRES_REVIEW"
   | "FAILED"
   | "CANCELLED"
   | "REFUNDED"

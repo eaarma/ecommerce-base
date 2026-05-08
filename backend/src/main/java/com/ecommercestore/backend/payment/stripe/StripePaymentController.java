@@ -23,6 +23,14 @@ public class StripePaymentController {
         return stripeService.createPaymentIntent(orderId, token);
     }
 
+    @PostMapping("/start")
+    public void beginPaymentSubmission(
+            @PathVariable("orderId") Long orderId,
+            @RequestParam("token") String token) {
+
+        stripeService.beginPaymentSubmission(orderId, token);
+    }
+
     @PostMapping("/confirm")
     public StripePaymentIntentResponse confirmPaymentIntent(
             @PathVariable("orderId") Long orderId,

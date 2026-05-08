@@ -4,6 +4,7 @@ public enum OrderItemStatus {
     RESERVED,
     ORDERED,
     CANCELLED,
+    CANCELLED_NO_REFUND,
     EXPIRED,
     REFUNDED,
     PARTIALLY_REFUNDED,

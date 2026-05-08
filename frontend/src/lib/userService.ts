@@ -7,7 +7,7 @@ import {
 
 export const UserService = {
   getAllUsers: async (): Promise<UserDto[]> => {
-    const res = await api.get("/api/manager/users");
+    const res = await api.get("/api/admin/users");
     return res.data;
   },
   createUser: async (data: CreateUserRequestDto): Promise<UserDto> => {
@@ -18,7 +18,7 @@ export const UserService = {
     id: string,
     data: UpdateUserRequestDto,
   ): Promise<UserDto> => {
-    const res = await api.patch(`/api/manager/users/${id}`, data);
+    const res = await api.patch(`/api/admin/users/${id}`, data);
     return res.data;
   },
 };

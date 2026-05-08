@@ -13,6 +13,7 @@ import { Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { ApiError } from "@/lib/api/axios";
+import ConfirmActionModal from "@/components/common/ConfirmActionModal";
 import { StorePageEditorSelectField as SelectField } from "@/components/manager/store/storePageEditor/StorePageEditorSelectField";
 import { StorePageEditorTextField as TextField } from "@/components/manager/store/storePageEditor/StorePageEditorTextField";
 import { StorePageEditorTextareaField as TextareaField } from "@/components/manager/store/storePageEditor/StorePageEditorTextareaField";
@@ -381,6 +382,8 @@ export default function StoreHomepageTab({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
+  const [isHeroRemovalConfirmOpen, setIsHeroRemovalConfirmOpen] = useState(false);
+  const [isRemovingHeroImage, setIsRemovingHeroImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingHeroStoragePath, setPendingHeroStoragePath] = useState<
     string | null
@@ -770,9 +773,20 @@ export default function StoreHomepageTab({
     }
   };
 
-  const handleRemoveHeroImage = () => {
-    void clearPendingHeroUpload();
-    updateField("heroImageUrl", "");
+  const handleRemoveHeroImage = async () => {
+    if (isRemovingHeroImage) {
+      return;
+    }
+
+    setIsRemovingHeroImage(true);
+
+    try {
+      await clearPendingHeroUpload();
+      updateField("heroImageUrl", "");
+      setIsHeroRemovalConfirmOpen(false);
+    } finally {
+      setIsRemovingHeroImage(false);
+    }
   };
 
   const handleReset = () => {
@@ -967,6 +981,7 @@ export default function StoreHomepageTab({
                     <div className="space-y-4">
                       <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100">
                         {form.heroImageUrl.trim() ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
                           <img
                             src={form.heroImageUrl.trim()}
                             alt="Homepage hero"
@@ -993,8 +1008,10 @@ export default function StoreHomepageTab({
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
-                            onClick={handleRemoveHeroImage}
-                            disabled={isAssetUploading || submitting}
+                            onClick={() => setIsHeroRemovalConfirmOpen(true)}
+                            disabled={
+                              isAssetUploading || submitting || isRemovingHeroImage
+                            }
                           >
                             Remove hero image
                           </button>
@@ -1482,6 +1499,19 @@ export default function StoreHomepageTab({
           </aside>
         </div>
       )}
+      <ConfirmActionModal
+        isOpen={isHeroRemovalConfirmOpen}
+        title="Remove hero image?"
+        description="This removes the current hero image from the homepage draft. Save the homepage to persist the change."
+        confirmLabel="Remove hero image"
+        cancelLabel="Keep image"
+        tone="error"
+        isSubmitting={isRemovingHeroImage}
+        onClose={() =>
+          !isRemovingHeroImage && setIsHeroRemovalConfirmOpen(false)
+        }
+        onConfirm={() => void handleRemoveHeroImage()}
+      />
     </section>
   );
 }

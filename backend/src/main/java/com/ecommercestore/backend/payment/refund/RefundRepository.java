@@ -18,6 +18,20 @@ public interface RefundRepository extends JpaRepository<Refund, UUID> {
 
     List<Refund> findAllByPaymentIdOrderByCreatedAtDesc(UUID paymentId);
 
+    @EntityGraph(attributePaths = { "payment", "order", "orderItem" })
+    java.util.Optional<Refund> findFirstByPaymentIdAndOrderItemIsNullAndAmountAndStatusOrderByCreatedAtDesc(
+            UUID paymentId,
+            BigDecimal amount,
+            RefundStatus status);
+
+    @EntityGraph(attributePaths = { "payment", "order", "orderItem" })
+    java.util.Optional<Refund> findFirstByPaymentIdAndOrderItemIdAndQuantityAndAmountAndStatusOrderByCreatedAtDesc(
+            UUID paymentId,
+            Long orderItemId,
+            Integer quantity,
+            BigDecimal amount,
+            RefundStatus status);
+
     @Query("""
             select coalesce(sum(r.amount), 0)
             from Refund r

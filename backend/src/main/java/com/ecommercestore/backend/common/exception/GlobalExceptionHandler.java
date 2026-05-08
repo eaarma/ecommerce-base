@@ -6,14 +6,18 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.MailException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -30,9 +34,48 @@ public class GlobalExceptionHandler {
                                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                                 .collect(Collectors.toList());
 
+                errors.addAll(ex.getBindingResult()
+                                .getGlobalErrors()
+                                .stream()
+                                .map(DefaultMessageSourceResolvable::getDefaultMessage)
+                                .toList());
+
                 return ResponseEntity
                                 .status(HttpStatus.BAD_REQUEST)
                                 .body(ErrorResponse.of("Validation failed", errors));
+        }
+
+        @ExceptionHandler(MissingServletRequestParameterException.class)
+        public ResponseEntity<ErrorResponse> handleMissingParameter(
+                        MissingServletRequestParameterException ex) {
+
+                return ResponseEntity
+                                .badRequest()
+                                .body(ErrorResponse.single(
+                                                "Bad request",
+                                                "Missing required parameter: " + ex.getParameterName()));
+        }
+
+        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<ErrorResponse> handleTypeMismatch(
+                        MethodArgumentTypeMismatchException ex) {
+
+                return ResponseEntity
+                                .badRequest()
+                                .body(ErrorResponse.single(
+                                                "Bad request",
+                                                "Invalid value for parameter: " + ex.getName()));
+        }
+
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ErrorResponse> handleUnreadableMessage(
+                        HttpMessageNotReadableException ex) {
+
+                return ResponseEntity
+                                .badRequest()
+                                .body(ErrorResponse.single(
+                                                "Bad request",
+                                                "Malformed request payload."));
         }
 
         @ExceptionHandler(IllegalArgumentException.class)
@@ -42,6 +85,15 @@ public class GlobalExceptionHandler {
                 return ResponseEntity
                                 .badRequest()
                                 .body(ErrorResponse.single("Bad request", ex.getMessage()));
+        }
+
+        @ExceptionHandler(IllegalStateException.class)
+        public ResponseEntity<ErrorResponse> handleIllegalState(
+                        IllegalStateException ex) {
+
+                return ResponseEntity
+                                .status(HttpStatus.CONFLICT)
+                                .body(ErrorResponse.single("Conflict", ex.getMessage()));
         }
 
         @ExceptionHandler(BadCredentialsException.class)

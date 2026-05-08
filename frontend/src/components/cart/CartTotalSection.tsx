@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 
+import { useCartAvailabilitySync } from "@/hooks/useCartAvailabilitySync";
+import { isPurchasableCartItem } from "@/store/cartSlice";
 import type { RootState } from "@/store/store";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -15,7 +17,10 @@ const formatPrice = (price: number) => currencyFormatter.format(price);
 export default function CartTotalSection() {
   const router = useRouter();
   const cartItems = useSelector((state: RootState) => state.cart.items);
-  const selectedItems = cartItems.filter((item) => item.selected !== false);
+  const { blockingItemCount, isSyncing, syncError } = useCartAvailabilitySync();
+  const selectedItems = cartItems.filter(
+    (item) => item.selected !== false && isPurchasableCartItem(item),
+  );
   const selectedLineCount = selectedItems.length;
   const itemCount = selectedItems.reduce(
     (total, item) => total + item.quantity,
@@ -94,10 +99,10 @@ export default function CartTotalSection() {
           <button
             type="button"
             className="btn btn-primary h-12 w-full text-base"
-            disabled={itemCount === 0}
+            disabled={itemCount === 0 || isSyncing}
             onClick={handleCheckout}
           >
-            Continue to Checkout
+            {isSyncing ? "Checking cart..." : "Continue to Checkout"}
           </button>
 
           <button
@@ -108,6 +113,16 @@ export default function CartTotalSection() {
             Continue Shopping
           </button>
         </div>
+
+        {(blockingItemCount > 0 || syncError) && (
+          <div className="rounded-2xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm leading-6 text-base-content/75">
+            {syncError
+              ? syncError
+              : `${blockingItemCount} cart ${
+                  blockingItemCount === 1 ? "item needs" : "items need"
+                } review before checkout.`}
+          </div>
+        )}
       </section>
     </aside>
   );

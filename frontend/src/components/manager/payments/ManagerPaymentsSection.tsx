@@ -24,6 +24,7 @@ const ACTIVE_PAYMENT_STATUSES = [
 ] as const satisfies readonly PaymentStatus[];
 const COMPLETED_PAYMENT_STATUSES = [
   "SUCCEEDED",
+  "SUCCEEDED_REQUIRES_REVIEW",
   "FAILED",
   "PARTIALLY_REFUNDED",
   "REFUNDED",
@@ -31,6 +32,7 @@ const COMPLETED_PAYMENT_STATUSES = [
 const ALL_PAYMENT_STATUSES = [
   "PENDING",
   "SUCCEEDED",
+  "SUCCEEDED_REQUIRES_REVIEW",
   "FAILED",
   "PARTIALLY_REFUNDED",
   "REFUNDED",
@@ -58,6 +60,8 @@ const getStatusBadgeClass = (status: PaymentStatus) => {
   switch (status) {
     case "SUCCEEDED":
       return "badge-success";
+    case "SUCCEEDED_REQUIRES_REVIEW":
+      return "badge-warning";
     case "PARTIALLY_REFUNDED":
     case "REFUNDED":
       return "badge-info";
@@ -403,8 +407,24 @@ function PaymentDetailsModal({
         </section>
 
         {(payment.failureCode || payment.failureMessage) && (
-          <section className="rounded-lg border border-error/30 bg-error/5 p-4">
-            <h4 className="font-semibold text-error">Failure</h4>
+          <section
+            className={`rounded-lg p-4 ${
+              payment.status === "SUCCEEDED_REQUIRES_REVIEW"
+                ? "border border-warning/30 bg-warning/10"
+                : "border border-error/30 bg-error/5"
+            }`}
+          >
+            <h4
+              className={`font-semibold ${
+                payment.status === "SUCCEEDED_REQUIRES_REVIEW"
+                  ? "text-warning"
+                  : "text-error"
+              }`}
+            >
+              {payment.status === "SUCCEEDED_REQUIRES_REVIEW"
+                ? "Review Note"
+                : "Failure"}
+            </h4>
             <div className="mt-3 space-y-2 text-sm">
               {payment.failureCode && (
                 <p>

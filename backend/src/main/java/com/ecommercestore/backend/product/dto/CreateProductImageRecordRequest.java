@@ -1,6 +1,8 @@
 package com.ecommercestore.backend.product.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,6 +17,7 @@ import lombok.Setter;
 @Builder
 public class CreateProductImageRecordRequest {
 
+    @Positive
     private Long variantId;
 
     @NotBlank
@@ -27,6 +30,7 @@ public class CreateProductImageRecordRequest {
     @Size(max = 255)
     private String altText;
 
+    @PositiveOrZero
     private Integer sortOrder;
 
     private Boolean isPrimary;

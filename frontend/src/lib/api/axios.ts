@@ -161,6 +161,10 @@ api.interceptors.response.use(
         toast.error("Resource not found.");
         break;
 
+      case 409:
+        toast.error(getApiErrorMessage(data as ApiErrorData | unknown));
+        break;
+
       case 500:
         toast.error("Server error. Please try again later.");
         break;

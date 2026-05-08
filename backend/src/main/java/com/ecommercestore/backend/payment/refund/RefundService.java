@@ -1,7 +1,5 @@
 package com.ecommercestore.backend.payment.refund;
 
-import com.ecommercestore.backend.email.OrderEmailRequestedEvent;
-import com.ecommercestore.backend.email.OrderEmailType;
 import com.ecommercestore.backend.order.Order;
 import com.ecommercestore.backend.order.OrderItem;
 import com.ecommercestore.backend.order.OrderItemStatus;
@@ -12,15 +10,12 @@ import com.ecommercestore.backend.payment.PaymentRepository;
 import com.ecommercestore.backend.payment.PaymentStatus;
 import com.ecommercestore.backend.payment.refund.dto.RefundResponse;
 import com.ecommercestore.backend.payment.stripe.StripeService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -29,17 +24,25 @@ public class RefundService {
     private static final List<PaymentStatus> REFUNDABLE_PAYMENT_STATUSES = List.of(
             PaymentStatus.SUCCEEDED,
             PaymentStatus.PARTIALLY_REFUNDED);
+    private static final List<OrderItemStatus> ITEM_REFUNDABLE_STATUSES = List.of(
+            OrderItemStatus.ORDERED,
+            OrderItemStatus.PARTIALLY_REFUNDED);
+    private static final List<OrderItemStatus> FULL_ORDER_REFUNDABLE_ITEM_STATUSES = List.of(
+            OrderItemStatus.ORDERED,
+            OrderItemStatus.PARTIALLY_REFUNDED,
+            OrderItemStatus.REFUNDED);
 
     private final RefundRepository refundRepository;
     private final RefundMapper refundMapper;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final StripeService stripeService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final RefundTransactionService refundTransactionService;
 
     @Transactional
     public RefundResponse refundOrder(Long orderId, String reason) {
         Order order = getRefundableOrder(orderId);
+        validateFullOrderRefundableItems(order);
         Payment payment = getRefundablePayment(orderId);
         BigDecimal alreadyRefunded = refundRepository.sumSucceededAmountByPaymentId(payment.getId());
         BigDecimal amount = payment.getAmount().subtract(alreadyRefunded);
@@ -48,17 +51,17 @@ public class RefundService {
             throw new IllegalStateException("Order has already been fully refunded.");
         }
 
-        Refund refund = createRefundRecord(payment, order, null, null, amount, reason);
-        markRefundSucceeded(refund, createStripeRefund(payment, refund));
+        Refund refund = refundTransactionService.createOrReuseRefundIntent(
+                payment.getId(),
+                order.getId(),
+                null,
+                null,
+                amount,
+                payment.getCurrency(),
+                reason);
+        Refund finalizedRefund = finalizeRefundAttempt(payment, refund);
 
-        if (refund.getStatus() == RefundStatus.SUCCEEDED) {
-            order.getItems().forEach(item -> item.setStatus(OrderItemStatus.REFUNDED));
-            order.setStatus(OrderStatus.CANCELLED_REFUNDED);
-            updatePaymentStatus(payment);
-            eventPublisher.publishEvent(new OrderEmailRequestedEvent(order.getId(), OrderEmailType.CANCELLATION, reason, null));
-        }
-
-        return refundMapper.toResponse(refund);
+        return refundMapper.toResponse(finalizedRefund);
     }
 
     @Transactional
@@ -73,6 +76,7 @@ public class RefundService {
                 .filter(orderItem -> orderItem.getId().equals(orderItemId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Order item not found."));
+        validateRefundableItemState(item);
 
         int alreadyRefunded = refundRepository.sumSucceededQuantityByOrderItemId(orderItemId);
         int remainingQuantity = item.getQuantity() - alreadyRefunded;
@@ -83,6 +87,11 @@ public class RefundService {
 
         Payment payment = getRefundablePayment(orderId);
         BigDecimal amount = item.getUnitPrice().multiply(BigDecimal.valueOf(quantity));
+
+        if (amount.signum() <= 0) {
+            throw new IllegalStateException("Refund amount must be greater than zero.");
+        }
+
         BigDecimal remainingPaymentAmount = payment.getAmount()
                 .subtract(refundRepository.sumSucceededAmountByPaymentId(payment.getId()));
 
@@ -90,22 +99,17 @@ public class RefundService {
             throw new IllegalStateException("Refund amount exceeds the remaining refundable payment amount.");
         }
 
-        Refund refund = createRefundRecord(payment, order, item, quantity, amount, reason);
-        markRefundSucceeded(refund, createStripeRefund(payment, refund));
+        Refund refund = refundTransactionService.createOrReuseRefundIntent(
+                payment.getId(),
+                order.getId(),
+                item.getId(),
+                quantity,
+                amount,
+                payment.getCurrency(),
+                reason);
+        Refund finalizedRefund = finalizeRefundAttempt(payment, refund);
 
-        if (refund.getStatus() != RefundStatus.SUCCEEDED) {
-            return refundMapper.toResponse(refund);
-        }
-
-        int totalRefundedQuantity = alreadyRefunded + quantity;
-        item.setStatus(totalRefundedQuantity == item.getQuantity()
-                ? OrderItemStatus.REFUNDED
-                : OrderItemStatus.PARTIALLY_REFUNDED);
-        updateOrderStatus(order);
-        updatePaymentStatus(payment);
-        eventPublisher.publishEvent(new OrderEmailRequestedEvent(order.getId(), OrderEmailType.ITEM_REFUND, reason, refund.getId()));
-
-        return refundMapper.toResponse(refund);
+        return refundMapper.toResponse(finalizedRefund);
     }
 
     @Transactional(readOnly = true)
@@ -148,62 +152,34 @@ public class RefundService {
         return payment;
     }
 
-    private Refund createRefundRecord(
-            Payment payment,
-            Order order,
-            OrderItem item,
-            Integer quantity,
-            BigDecimal amount,
-            String reason) {
-        return refundRepository.save(Refund.builder()
-                .payment(payment)
-                .order(order)
-                .orderItem(item)
-                .quantity(quantity)
-                .amount(amount)
-                .currency(payment.getCurrency())
-                .reason(reason)
-                .status(RefundStatus.PENDING)
-                .build());
-    }
+    private Refund finalizeRefundAttempt(Payment payment, Refund refund) {
+        if (refund.getStatus() == RefundStatus.SUCCEEDED) {
+            return refund;
+        }
 
-    private com.stripe.model.Refund createStripeRefund(Payment payment, Refund refund) {
-        return stripeService.createRefund(
+        com.stripe.model.Refund stripeRefund = stripeService.createRefund(
                 payment.getProviderPaymentIntentId(),
                 refund.getAmount(),
                 refund.getCurrency(),
                 "refund-" + refund.getId());
+
+        return refundTransactionService.finalizeRefundFromStripe(refund.getId(), stripeRefund);
     }
 
-    private void markRefundSucceeded(Refund refund, com.stripe.model.Refund stripeRefund) {
-        refund.setStripeRefundId(stripeRefund.getId());
-
-        if ("failed".equals(stripeRefund.getStatus())) {
-            refund.setStatus(RefundStatus.FAILED);
-            throw new IllegalStateException("Stripe refund failed.");
-        }
-
-        if ("succeeded".equals(stripeRefund.getStatus())) {
-            refund.setStatus(RefundStatus.SUCCEEDED);
-            refund.setSucceededAt(Instant.now());
-            return;
-        }
-
-        refund.setStatus(RefundStatus.PENDING);
-    }
-
-    private void updateOrderStatus(Order order) {
-        boolean allRefunded = order.getItems()
+    private void validateFullOrderRefundableItems(Order order) {
+        boolean hasNonRefundableItems = order.getItems()
                 .stream()
-                .allMatch(item -> item.getStatus() == OrderItemStatus.REFUNDED);
+                .map(OrderItem::getStatus)
+                .anyMatch(status -> !FULL_ORDER_REFUNDABLE_ITEM_STATUSES.contains(status));
 
-        order.setStatus(allRefunded ? OrderStatus.REFUNDED : OrderStatus.PARTIALLY_REFUNDED);
+        if (hasNonRefundableItems) {
+            throw new IllegalStateException("Order contains items that cannot be refunded.");
+        }
     }
 
-    private void updatePaymentStatus(Payment payment) {
-        BigDecimal refundedAmount = refundRepository.sumSucceededAmountByPaymentId(payment.getId());
-        payment.setStatus(refundedAmount.compareTo(payment.getAmount()) >= 0
-                ? PaymentStatus.REFUNDED
-                : PaymentStatus.PARTIALLY_REFUNDED);
+    private void validateRefundableItemState(OrderItem item) {
+        if (!ITEM_REFUNDABLE_STATUSES.contains(item.getStatus())) {
+            throw new IllegalStateException("Only ordered or partially refunded items can be refunded.");
+        }
     }
 }

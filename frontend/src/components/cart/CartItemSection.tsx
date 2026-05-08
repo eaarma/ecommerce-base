@@ -7,6 +7,7 @@ import CartItem from "@/components/cart/CartItem";
 import {
   decreaseQuantity,
   increaseQuantity,
+  isPurchasableCartItem,
   removeFromCart,
   removeSelectedFromCart,
   setAllCartItemSelection,
@@ -20,10 +21,13 @@ const isSelected = (selected?: boolean) => selected !== false;
 export default function CartItemSection() {
   const dispatch = useDispatch<AppDispatch>();
   const cartItems = useSelector((state: RootState) => state.cart.items);
-  const selectedCount = cartItems.filter((item) => isSelected(item.selected))
-    .length;
+  const selectedCount = cartItems.filter((item) => isSelected(item.selected)).length;
+  const selectableItems = cartItems.filter(isPurchasableCartItem);
+  const selectedSelectableCount = selectableItems.filter((item) =>
+    isSelected(item.selected),
+  ).length;
   const allSelected =
-    cartItems.length > 0 && selectedCount === cartItems.length;
+    selectableItems.length > 0 && selectedSelectableCount === selectableItems.length;
 
   const handleToggleAll = () => {
     dispatch(setAllCartItemSelection(!allSelected));
@@ -77,6 +81,7 @@ export default function CartItemSection() {
                     checked={allSelected}
                     onChange={handleToggleAll}
                     className="checkbox checkbox-primary"
+                    disabled={selectableItems.length === 0}
                   />
                   <span className="text-sm font-medium text-base-content/80">
                     Select all items

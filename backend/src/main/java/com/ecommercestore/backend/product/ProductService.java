@@ -34,6 +34,7 @@ public class ProductService {
     public ProductResponse createProduct(CreateProductRequest request) {
         validateProductSlug(productMapper.normalizeSlugValue(request.getSlug()), null);
         validateVariantSkus(request.getVariants());
+        validateVariantDefinitions(request.getVariants());
 
         Product product = productMapper.toEntity(request);
         syncProductStatus(product);
@@ -78,6 +79,7 @@ public class ProductService {
         Product product = findProductById(productId);
         validateProductSlug(productMapper.normalizeSlugValue(request.getSlug()), productId);
         validateVariantSkus(request.getVariants());
+        validateVariantDefinitions(request.getVariants());
         productMapper.updateEntity(request, product);
         syncProductStatus(product);
 
@@ -201,6 +203,31 @@ public class ProductService {
                 throw new IllegalArgumentException("Variant SKU already exists: " + sku);
             }
         }
+    }
+
+    private void validateVariantDefinitions(List<com.ecommercestore.backend.product.dto.ProductVariantRequest> variants) {
+        var seenDefinitions = new java.util.HashSet<String>();
+
+        for (var variant : variants) {
+            String definitionKey = String.join("|",
+                    normalizeVariantAttribute(variant.getColor()),
+                    normalizeVariantAttribute(variant.getSize()),
+                    normalizeVariantAttribute(variant.getWeight()),
+                    normalizeVariantAttribute(variant.getMaterial()));
+
+            if (!seenDefinitions.add(definitionKey)) {
+                throw new IllegalArgumentException("Variant attribute combinations must be unique within a product.");
+            }
+        }
+    }
+
+    private String normalizeVariantAttribute(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String normalized = value.trim();
+        return normalized.toLowerCase(java.util.Locale.ROOT);
     }
 
     private void syncVariantStatus(ProductVariant variant) {

@@ -14,6 +14,7 @@ export type CartItem = {
   stockQuantity: number;
   quantity: number;
   status: ProductStatus;
+  availabilityIssue?: string | null;
   selected?: boolean;
 };
 
@@ -46,7 +47,23 @@ type UpdateQuantityPayload = {
   quantity: number;
 };
 
+type ReconcileCartLinePayload = {
+  lineId: string;
+  name: string;
+  variantLabel: string;
+  variantSku: string;
+  price: number;
+  imageUrl?: string | null;
+  stockQuantity: number;
+  quantity: number;
+  status: ProductStatus;
+  selected: boolean;
+  availabilityIssue?: string | null;
+};
+
 const isSelected = (item: CartItem) => item.selected !== false;
+export const isPurchasableCartItem = (item: CartItem) =>
+  item.status === "ACTIVE" && item.stockQuantity > 0 && item.quantity > 0;
 
 const cartSlice = createSlice({
   name: "cart",
@@ -81,6 +98,7 @@ const cartSlice = createSlice({
         existingItem.variantSku = variantSku;
         existingItem.imageUrl = imageUrl;
         existingItem.status = status;
+        existingItem.availabilityIssue = null;
         existingItem.selected = isSelected(existingItem);
       } else {
         state.items.push({
@@ -95,6 +113,7 @@ const cartSlice = createSlice({
           stockQuantity,
           quantity: Math.min(quantity, stockQuantity),
           status,
+          availabilityIssue: null,
           selected: true,
         });
       }
@@ -160,17 +179,46 @@ const cartSlice = createSlice({
 
       if (!item) return;
 
+      if (!isPurchasableCartItem(item)) {
+        item.selected = false;
+        return;
+      }
+
       item.selected = !isSelected(item);
     },
 
     setAllCartItemSelection: (state, action: PayloadAction<boolean>) => {
       state.items.forEach((item) => {
-        item.selected = action.payload;
+        item.selected = action.payload ? isPurchasableCartItem(item) : false;
       });
     },
 
     removeSelectedFromCart: (state) => {
       state.items = state.items.filter((item) => !isSelected(item));
+    },
+
+    reconcileCartItems: (
+      state,
+      action: PayloadAction<ReconcileCartLinePayload[]>,
+    ) => {
+      action.payload.forEach((update) => {
+        const item = state.items.find(
+          (cartItem) => cartItem.lineId === update.lineId,
+        );
+
+        if (!item) return;
+
+        item.name = update.name;
+        item.variantLabel = update.variantLabel;
+        item.variantSku = update.variantSku;
+        item.price = update.price;
+        item.imageUrl = update.imageUrl;
+        item.stockQuantity = update.stockQuantity;
+        item.quantity = update.quantity;
+        item.status = update.status;
+        item.selected = update.selected;
+        item.availabilityIssue = update.availabilityIssue ?? null;
+      });
     },
   },
 });
@@ -185,6 +233,7 @@ export const {
   toggleItemSelection,
   setAllCartItemSelection,
   removeSelectedFromCart,
+  reconcileCartItems,
 } = cartSlice.actions;
 
 export default cartSlice.reducer;

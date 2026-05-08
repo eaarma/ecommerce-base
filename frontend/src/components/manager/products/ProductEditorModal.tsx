@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { CopyPlus, PackagePlus, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
+import ConfirmActionModal from "@/components/common/ConfirmActionModal";
 import Modal from "@/components/common/Modal";
 import ProductImagesManager from "@/components/manager/products/ProductImagesManager";
 import { ManagerProductService } from "@/lib/managerProductService";
@@ -221,6 +222,9 @@ export default function ProductEditorModal({
   const [slugTouched, setSlugTouched] = useState(Boolean(product?.slug));
   const [pendingTraitKey, setPendingTraitKey] = useState("");
   const [pendingTraitValue, setPendingTraitValue] = useState("");
+  const [variantPendingRemoval, setVariantPendingRemoval] =
+    useState<VariantForm | null>(null);
+  const [isRemovingVariant, setIsRemovingVariant] = useState(false);
   const formRef = useRef(form);
   const saveSucceededRef = useRef(false);
   const removedPersistedStoragePathsRef = useRef<Set<string>>(new Set());
@@ -424,7 +428,7 @@ export default function ProductEditorModal({
     );
 
     if (!variantToRemove) {
-      return;
+      return false;
     }
 
     if (!variantToRemove.id) {
@@ -440,7 +444,7 @@ export default function ProductEditorModal({
 
         if (failedStoragePaths.length > 0) {
           toast.error("Could not clean up the removed variant images.");
-          return;
+          return false;
         }
       }
     }
@@ -455,6 +459,33 @@ export default function ProductEditorModal({
         )
         .filter((variant) => !(variant.clientId === clientId && !variant.id)),
     }));
+    return true;
+  };
+
+  const closeVariantRemovalDialog = () => {
+    if (isRemovingVariant) {
+      return;
+    }
+
+    setVariantPendingRemoval(null);
+  };
+
+  const confirmVariantRemoval = async () => {
+    if (!variantPendingRemoval || isRemovingVariant) {
+      return;
+    }
+
+    setIsRemovingVariant(true);
+
+    try {
+      const removed = await removeOrArchiveVariant(variantPendingRemoval.clientId);
+
+      if (removed) {
+        setVariantPendingRemoval(null);
+      }
+    } finally {
+      setIsRemovingVariant(false);
+    }
   };
 
   const handleClose = () => {
@@ -633,7 +664,8 @@ export default function ProductEditorModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} dismissable={!submitting}>
+    <>
+      <Modal isOpen={isOpen} onClose={handleClose} dismissable={!submitting}>
       <div className="pr-10">
         <h2 className="text-2xl font-semibold text-base-content">{title}</h2>
         <p className="mt-2 text-sm text-base-content/60">{description}</p>
@@ -895,8 +927,11 @@ export default function ProductEditorModal({
                     <button
                       type="button"
                       className="btn btn-outline btn-error btn-xs"
-                      onClick={() => void removeOrArchiveVariant(variant.clientId)}
-                      disabled={form.variants.length === 1 && !variant.id}
+                      onClick={() => setVariantPendingRemoval(variant)}
+                      disabled={
+                        (form.variants.length === 1 && !variant.id) ||
+                        isRemovingVariant
+                      }
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       {variant.id ? "Archive" : "Remove"}
@@ -1091,8 +1126,28 @@ export default function ProductEditorModal({
             {submitting ? submittingLabel : submitLabel}
           </button>
         </div>
-      </form>
-    </Modal>
+        </form>
+      </Modal>
+      <ConfirmActionModal
+        isOpen={variantPendingRemoval !== null}
+        title={
+          variantPendingRemoval?.id ? "Archive variant?" : "Remove variant?"
+        }
+        description={
+          variantPendingRemoval?.id
+            ? "This saved variant will be archived and removed from the storefront after you save the product changes."
+            : "This new variant will be removed from the draft product, including any unsaved uploaded images attached to it."
+        }
+        confirmLabel={
+          variantPendingRemoval?.id ? "Archive variant" : "Remove variant"
+        }
+        cancelLabel="Keep variant"
+        tone="error"
+        isSubmitting={isRemovingVariant}
+        onClose={closeVariantRemovalDialog}
+        onConfirm={confirmVariantRemoval}
+      />
+    </>
   );
 }
 

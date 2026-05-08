@@ -38,8 +38,8 @@ management:
         include: health,info
 
 stripe:
-  enabled: true
-  api-key: ${STRIPE_API_KEY}
-  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  enabled: ${STRIPE_ENABLED:true}
+  api-key: ${STRIPE_API_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
   account-id: ${STRIPE_ACCOUNT_ID:}
   api-version: ${STRIPE_API_VERSION:}

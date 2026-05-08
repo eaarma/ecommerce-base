@@ -7,6 +7,7 @@ build/
 # Gradle
 .gradle/
 .gradle-home/
+.gradle-user-home/
 backend/.gradle-home/
 backend/.gradle/
 
@@ -45,6 +46,5 @@ out/
 .env.*
 .env.local
 .env.*.local
+!.env.example
 application-dev.yml
-
-

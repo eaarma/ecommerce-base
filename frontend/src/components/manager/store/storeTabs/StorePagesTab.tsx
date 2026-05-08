@@ -9,7 +9,6 @@ import { CancellationRefundPageEditor } from "@/components/manager/store/StorePa
 import { FaqPageEditor } from "@/components/manager/store/StorePagesTabs/FaqPageEditor";
 import { PrivacyPageEditor } from "@/components/manager/store/StorePagesTabs/PrivacyPageEditor";
 import { ShippingPageEditor } from "@/components/manager/store/StorePagesTabs/ShippingPageEditor";
-import { StorePageEditorCard as Card } from "@/components/manager/store/storePageEditor/StorePageEditorCard";
 import { StorePageEditorSelectField as SelectField } from "@/components/manager/store/storePageEditor/StorePageEditorSelectField";
 import { StorePageEditorSummaryRow as SummaryRow } from "@/components/manager/store/storePageEditor/StorePageEditorSummaryRow";
 import { TermsPageEditor } from "@/components/manager/store/StorePagesTabs/TermsPageEditor";
