@@ -1,75 +1,118 @@
 # E-Commerce Store
 
-Single-store e-commerce platform with a Spring Boot backend and a Next.js storefront/admin UI.
+Single-store e-commerce platform built as a reusable baseline for product-based shops.
 
-## Stack
+This repository contains the full application:
 
-- Backend: Java 25, Spring Boot 4, Gradle, PostgreSQL, Flyway, Spring Security, Stripe, SMTP mail
-- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS 4, DaisyUI, Redux Toolkit, Firebase Storage, Stripe.js
+- a public storefront for browsing products and completing guest checkout
+- a protected manager/admin workspace for running store operations
+- a Spring Boot backend for API, business logic, auth, and payment workflows
+- a Next.js frontend for the customer-facing site and the internal management UI
+
+## Project Goals
+
+- Keep the product model single-store and easy to reason about
+- Support guest checkout without customer accounts
+- Separate product, order, payment, refund, delivery, and store-content concerns cleanly
+- Provide a baseline that can be stabilized first, then extended with infrastructure and deployment work later
+
+## Product Scope
+
+This is intentionally not a marketplace or multi-tenant system.
+
+The current scope centers on one store with:
+
+- storefront browsing and product detail pages
+- cart and checkout flows
+- Stripe-based payment flow
+- order, payment, refund, and delivery tracking on the backend
+- manager/admin tools for products, orders, payments, users, homepage content, and store pages
+- centralized shop branding, contact, SEO, and legal/informational page content
+
+## System Overview
+
+### Frontend
+
+The frontend in [frontend/](./frontend/README.md) is a Next.js application that serves both:
+
+- the public storefront
+- the authenticated back-office manager experience
+
+It handles page rendering, cart persistence, checkout UX, Stripe client integration, and store-management screens for content and commerce operations.
+
+### Backend
+
+The backend in [backend/](./backend/README.md) is a Spring Boot application that provides:
+
+- public storefront APIs
+- authenticated management APIs
+- JWT-based staff authentication
+- order reservation and checkout workflows
+- Stripe payment and refund handling
+- Flyway-managed database migrations
+- store configuration, homepage, and legal-page content management
+
+### Supporting Services
+
+The project currently expects or integrates with:
+
+- PostgreSQL for primary persistence
+- Stripe for payments and webhooks
+- Firebase Storage for frontend-managed asset uploads
+- SMTP for contact and order-related email delivery
+
+## Core Domain Areas
+
+- `Shop`: store identity, contact details, branding, and public-facing metadata
+- `HomepageConfig`: hero, featured content, spotlight, CTA, and trust/value sections
+- `StorePage`: legal and informational pages such as About, FAQ, Terms, Privacy, Shipping, and Refund Policy
+- `Product` and `ProductVariant`: catalog structure, pricing, imagery, and availability
+- `Order` and `Delivery`: guest checkout records, delivery state, and order lifecycle
+- `Payment` and `Refund`: payment provider state, reconciliation, and refund workflows
+- `User`: admin and manager accounts for back-office access
 
 ## Repository Layout
 
-- `backend/`: Spring Boot API, database migrations, domain logic, tests
-- `frontend/`: Next.js storefront and manager UI
-
-## Local Setup
-
-### Backend
-
-1. Copy `backend/.env.example` to `backend/.env`.
-2. Copy `backend/src/main/resources/application-dev.example.yml` to `backend/src/main/resources/application-dev.yml`.
-3. Update the copied files with your local database and JWT settings.
-4. Leave `STRIPE_ENABLED=false` until you have working Stripe credentials.
-5. Start the backend from `backend/` with:
-
-```powershell
-.\gradlew.bat bootRun
-```
-
-### Frontend
-
-1. Copy `frontend/.env.example` to `frontend/.env.local`.
-2. Fill in the frontend API, Firebase, and Stripe values.
-3. Install dependencies and start the app from `frontend/`:
-
-```powershell
-npm install
-npm run dev
-```
-
-The frontend expects the backend API at `NEXT_PUBLIC_API_BASE_URL`.
-
-## Verification Commands
-
-Run these from the package directory they belong to.
-
-### Backend
-
-```powershell
-.\gradlew.bat clean build
-```
-
-### Frontend
-
-```powershell
-npm run typecheck
-npm run lint
-npm run build
-```
-
-## Environment Notes
-
-- `frontend/.env.example` contains the public runtime variables the Next.js app currently uses.
-- `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` is intentionally not included because the codebase does not read it.
-- `backend/.env.example` contains shared backend environment variables.
-- `backend/src/main/resources/application-dev.example.yml` documents the local Spring `dev` profile shape.
-- Real `.env` files stay ignored; only example files are meant to be committed.
+- [backend/](./backend/README.md): Spring Boot API, domain logic, migrations, and tests
+- [frontend/](./frontend/README.md): Next.js storefront and manager UI
+- `backend/.env.example`: backend environment variable template
+- `frontend/.env.example`: frontend environment variable template
+- `backend/src/main/resources/application-dev.example.yml`: local Spring dev-profile template
 
 ## Current Baseline
 
-Branch 15 is intended to be the stabilization baseline before infrastructure work:
+This branch is intended to act as the stabilization baseline before infrastructure work begins.
 
-- backend tests and build should pass
-- frontend typecheck, lint, and production build should pass
-- environment variable names are documented through checked-in examples
-- obvious starter leftovers and unused assets are removed
+At this stage, the project is expected to satisfy:
+
+- backend tests passing
+- backend build passing
+- frontend typecheck passing
+- frontend lint passing
+- frontend production build passing
+- checked-in environment examples for local setup
+- no obvious starter leftovers in the repo root and app packages
+
+## How To Navigate This Repo
+
+- Start here for the full project picture
+- Read [backend/README.md](./backend/README.md) for the API and domain-service side
+- Read [frontend/README.md](./frontend/README.md) for the storefront and manager-app side
+- Use the `.env.example` files when setting up a local environment
+
+## Local Setup References
+
+This README is meant to stay overview-focused, so local setup details are intentionally light.
+
+The most important starting points are:
+
+- `backend/.env.example`
+- `backend/src/main/resources/application-dev.example.yml`
+- `frontend/.env.example`
+
+The main verification commands remain:
+
+- backend: `.\gradlew.bat clean build`
+- frontend: `npm run typecheck`
+- frontend: `npm run lint`
+- frontend: `npm run build`
