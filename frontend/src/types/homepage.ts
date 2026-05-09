@@ -71,7 +71,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfigPublicDto = {
   heroButtonText: "Browse products",
   heroButtonLink: "/products",
   heroButtonPosition: "LEFT",
-  heroImageUrl: "/hero_placeholder.png",
+  heroImageUrl: "/default_image.png",
   heroTextColorMode: "AUTO",
   heroCustomTextColor: null,
   heroOverlayStrength: 36,

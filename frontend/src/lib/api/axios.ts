@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 
 import { store } from "@/store/store";
 import { clearAuth } from "@/store/authSlice";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 import {
   getStoredAccessToken,
   getStoredAuthUser,
@@ -63,11 +64,7 @@ export class ApiError extends Error {
   }
 }
 
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!baseURL) {
-  throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
-}
+const baseURL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL,

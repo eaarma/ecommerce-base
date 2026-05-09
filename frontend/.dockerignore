@@ -1,0 +1,14 @@
+.git
+.gitattributes
+.gitignore
+.next
+node_modules
+npm-debug.log*
+.env
+.env.*
+.idea
+.vscode
+coverage
+README.md
+AGENTS.md
+CLAUDE.md

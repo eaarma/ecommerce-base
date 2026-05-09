@@ -1,4 +1,5 @@
 import { DEFAULT_PUBLIC_STORE_PAGES } from "@/lib/storePageDefaults";
+import { getApiBaseUrl } from "@/lib/apiBaseUrl";
 import type {
   AboutBadgeCardDto,
   AboutPageContentDto,
@@ -12,11 +13,7 @@ import type {
   StorePageSlug,
 } from "@/types/storePage";
 
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!baseURL) {
-  throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
-}
+const baseURL = getApiBaseUrl();
 
 type ApiRequestError = Error & {
   status: number;

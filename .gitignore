@@ -1,0 +1,5 @@
+# Root environment variables
+.env
+
+# Docker overrides
+docker-compose.override.yml
